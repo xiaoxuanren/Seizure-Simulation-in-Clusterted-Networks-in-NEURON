@@ -75,8 +75,9 @@ def detect_network_bursts(
         spike_data: Mapping from neuron id to spike times in milliseconds.
         n_neurons: Total number of neurons.
         duration_ms: Recording duration in milliseconds.
-        participation_threshold: Minimum fraction of *distinct* neurons that
-            must fire within an event window for it to count as a network burst.
+        participation_threshold: Fraction of *distinct* neurons that must be
+            strictly exceeded within an event window for it to count as a network
+            burst (default 0.8 ⇒ a burst needs > 80% participation).
         burn_in_ms: Startup transient (ms) excluded before detection.
         activity_bin_ms: Bin width (ms) for the coarse population-activity signal
             used to bracket candidate events.
@@ -144,7 +145,9 @@ def detect_network_bursts(
             if s.size and np.any((s >= w0) & (s < w1)):
                 participants += 1
         participation = participants / max(1, n_neurons)
-        if participation >= participation_threshold:
+        # Spec: a network burst requires strictly MORE than the threshold
+        # fraction of neurons (> 80% by default), not >=.
+        if participation > participation_threshold:
             # Peak time = center of mass of population activity in the window.
             in_win = [(s[(s >= w0) & (s < w1)]) for s in spike_arrays]
             all_in = np.concatenate([a for a in in_win if a.size]) if any(a.size for a in in_win) else np.array([w0])
