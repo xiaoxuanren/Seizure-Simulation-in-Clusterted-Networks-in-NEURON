@@ -1,0 +1,291 @@
+"""End-to-end workflows: topology -> network -> run -> save (+ ground truth).
+
+Mirrors the LIF project's ``workflows.py`` (``sequential_simulation_individual_saves``):
+build one network, save its ground-truth structure once, then run several
+independent recordings and save each to disk in the inference-ready session
+layout. Also provides :func:`run_single_state` for quick in-memory
+normal-vs-4-AP comparisons without touching disk.
+
+Independent recordings share the *same* wired network (so the ground truth is
+constant) but use different Poisson-noise seeds, exactly like drawing repeated
+trials from one culture.
+"""
+
+import json
+import os
+from datetime import datetime
+
+from . import states as states_module
+from .analysis import burst_statistics, detect_network_bursts
+from .io import save_network_structure, save_recording_data
+from .network_builder import build_network
+from .simulation import run_simulation
+from .topology import build_topology, build_topology_lognormal
+
+
+def run_single_state(
+    topology,
+    state=None,
+    build_kwargs=None,
+    duration=8000.0,
+    dt=0.025,
+    discard_transient_ms=1000.0,
+    record_voltage=False,
+    voltage_dt=1.0,
+    noise_seed=1000,
+):
+    """Build a network in one pharmacological state, run it, and detect bursts.
+
+    Intended for interactive verification and normal-vs-4-AP comparisons; nothing
+    is written to disk.
+
+    Args:
+        topology: A topology dict from :mod:`neuron_simulation.topology`.
+        state: Optional state-override dict (e.g. from
+            :func:`neuron_simulation.states.normal_state`); its ``gbar_kA_*``
+            keys override ``build_kwargs``.
+        build_kwargs: Base keyword arguments for
+            :func:`neuron_simulation.network_builder.build_network`.
+        duration: Kept recording duration in milliseconds.
+        dt: Integration step in milliseconds.
+        discard_transient_ms: Startup transient discarded before the kept window.
+        record_voltage: Whether to record downsampled voltage.
+        voltage_dt: Voltage sampling interval (ms).
+        noise_seed: Base seed for the Poisson background.
+
+    Returns:
+        A dict with ``spike_data``, ``voltage_data``, ``bursts`` (list),
+        ``burst_stats`` (dict), ``network``, and ``state_name``.
+    """
+    build_kwargs = dict(build_kwargs or {})
+    build_kwargs["noise_seed"] = noise_seed
+    state_name = "custom"
+    if state is not None:
+        state_name = state.get("state_name", "custom")
+        for key in ("gbar_kA_exc", "gbar_kA_inh"):
+            if key in state:
+                build_kwargs[key] = state[key]
+
+    network = build_network(topology, **build_kwargs)
+    spike_data, voltage_data = run_simulation(
+        network,
+        duration=duration,
+        dt=dt,
+        discard_transient_ms=discard_transient_ms,
+        record_voltage=record_voltage,
+        voltage_dt=voltage_dt,
+    )
+    bursts = detect_network_bursts(spike_data, network.n_neurons, duration, burn_in_ms=0.0)
+    stats = burst_statistics(bursts, duration, burn_in_ms=0.0)
+    print(
+        f"[{state_name}] {stats['n_bursts']} network bursts "
+        f"({stats['burst_rate_hz']:.2f} Hz), mean participation "
+        f"{stats['mean_participation']:.2f}"
+    )
+    return {
+        "spike_data": spike_data,
+        "voltage_data": voltage_data,
+        "bursts": bursts,
+        "burst_stats": stats,
+        "network": network,
+        "state_name": state_name,
+    }
+
+
+def _bursts_to_windows(bursts, duration_ms):
+    """Convert detected bursts into ``(start, end)`` burst/inter-burst windows.
+
+    Args:
+        bursts: List of burst dicts from :func:`detect_network_bursts`.
+        duration_ms: Recording duration in milliseconds.
+
+    Returns:
+        A tuple ``(burst_windows, interburst_windows)`` of ``(start, end)`` lists.
+    """
+    burst_windows = [(b["start_ms"], b["end_ms"]) for b in bursts]
+    interburst = []
+    prev = 0.0
+    for start, end in burst_windows:
+        if start > prev:
+            interburst.append((prev, start))
+        prev = end
+    if prev < duration_ms:
+        interburst.append((prev, duration_ms))
+    return burst_windows, interburst
+
+
+def generate_dataset(
+    n_recordings=5,
+    recording_duration=30000.0,
+    topology_kind="lognormal",
+    topology_kwargs=None,
+    build_kwargs=None,
+    state=None,
+    dt=0.025,
+    discard_transient_ms=1000.0,
+    record_voltage=False,
+    voltage_dt=1.0,
+    voltage_storage_backend="inline_npz",
+    target_freq=10,
+    save_dir="NEURON data",
+    participation_threshold=0.8,
+    noise_seed_base=1000,
+    topology_seed=0,
+):
+    """Generate a multi-recording session saved in the inference-ready layout.
+
+    Biophysical analogue of ``sequential_simulation_individual_saves``: builds a
+    topology and network once, saves the ground-truth structure, then runs
+    ``n_recordings`` independent recordings (distinct noise seeds) and saves each.
+
+    Args:
+        n_recordings: Number of independent recordings to generate.
+        recording_duration: Kept duration of each recording in milliseconds.
+        topology_kind: ``"lognormal"`` (preferred) or ``"discrete_hub"``.
+        topology_kwargs: Extra keyword args for the chosen topology builder.
+        build_kwargs: Keyword args for
+            :func:`neuron_simulation.network_builder.build_network`.
+        state: Optional state-override dict (defaults to
+            :func:`neuron_simulation.states.normal_state`).
+        dt: Integration step in milliseconds.
+        discard_transient_ms: Startup transient discarded from each recording.
+        record_voltage: Whether to record and save downsampled voltage.
+        voltage_dt: Voltage sampling interval (ms).
+        voltage_storage_backend: ``"inline_npz"`` or ``"hdf5_external"``.
+        target_freq: Resampling frequency (Hz) for the saved raster.
+        save_dir: Root output directory for the session bundle.
+        participation_threshold: Fraction of neurons required for a network burst
+            (used when tagging saved burst windows).
+        noise_seed_base: Base Poisson seed; recording ``r`` uses
+            ``noise_seed_base + 1000 * r`` per neuron.
+        topology_seed: Seed for the topology builder.
+
+    Returns:
+        A tuple ``(session_metadata, session_dir)``.
+    """
+    topology_kwargs = dict(topology_kwargs or {})
+    topology_kwargs.setdefault("seed", topology_seed)
+    build_kwargs = dict(build_kwargs or {})
+    if state is None:
+        state = states_module.normal_state()
+    for key in ("gbar_kA_exc", "gbar_kA_inh"):
+        if key in state:
+            build_kwargs.setdefault(key, state[key])
+
+    os.makedirs(save_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_dir = os.path.join(save_dir, timestamp)
+
+    print("=" * 70)
+    print(f"NEURON SESSION {timestamp}  ({topology_kind}, state={state.get('state_name')})")
+    print("=" * 70)
+
+    # --- topology + network (built once; ground truth is constant) ---
+    if topology_kind == "lognormal":
+        topology = build_topology_lognormal(**topology_kwargs)
+    elif topology_kind == "discrete_hub":
+        topology = build_topology(**topology_kwargs)
+    else:
+        raise ValueError(f"Unknown topology_kind={topology_kind!r}")
+
+    network = build_network(topology, noise_seed=noise_seed_base, **build_kwargs)
+    cluster_info = topology["cluster_info"]
+
+    network_file = save_network_structure(
+        topology["connections"],
+        topology["neuron_positions"],
+        cluster_info,
+        topology["weight_params"],
+        timestamp,
+        save_dir,
+    )
+
+    session_metadata = {
+        "timestamp": timestamp,
+        "session_dir": session_dir,
+        "simulator": "NEURON",
+        "n_recordings": n_recordings,
+        "recording_duration": recording_duration,
+        "num_neurons": topology["n_neurons"],
+        "num_connections": int(len(topology["connections"])),
+        "topology_kind": topology_kind,
+        "density": float(cluster_info.get("density", 0.0)),
+        "target_freq": target_freq,
+        "dt": dt,
+        "discard_transient_ms": discard_transient_ms,
+        "record_voltage": record_voltage,
+        "voltage_sample_rate": voltage_dt if record_voltage else None,
+        "voltage_storage_backend": voltage_storage_backend if record_voltage else None,
+        "state": state,
+        "build_config": network.config,
+        "network_file": network_file,
+        "mode": "spontaneous_bursting",
+        "background_input": True,
+        "participation_threshold": participation_threshold,
+        "recordings": [],
+    }
+
+    for rec_idx in range(n_recordings):
+        print(f"\n--- recording {rec_idx + 1}/{n_recordings} ---")
+        # Re-seed the Poisson background so each recording is an independent trial.
+        for i, gen in enumerate(network.noise):
+            gen.stim.seed(noise_seed_base + 1000 * rec_idx + i)
+
+        try:
+            spike_data, voltage_data = run_simulation(
+                network,
+                duration=recording_duration,
+                dt=dt,
+                discard_transient_ms=discard_transient_ms,
+                record_voltage=record_voltage,
+                voltage_dt=voltage_dt,
+            )
+            if voltage_data is not None:
+                voltage_data["storage_backend"] = voltage_storage_backend
+            bursts = detect_network_bursts(
+                spike_data, network.n_neurons, recording_duration,
+                participation_threshold=participation_threshold, burn_in_ms=0.0,
+            )
+            burst_windows, interburst_windows = _bursts_to_windows(bursts, recording_duration)
+            stats = burst_statistics(bursts, recording_duration, burn_in_ms=0.0)
+            print(
+                f"  {stats['n_bursts']} bursts ({stats['burst_rate_hz']:.2f} Hz), "
+                f"mean participation {stats['mean_participation']:.2f}"
+            )
+
+            recording_file = save_recording_data(
+                spike_data,
+                voltage_data,
+                cluster_info,
+                rec_idx,
+                timestamp,
+                save_dir,
+                target_freq=target_freq,
+                duration=int(recording_duration),
+                burst_windows=burst_windows,
+                interburst_windows=interburst_windows,
+            )
+            session_metadata["recordings"].append(
+                {
+                    "index": rec_idx,
+                    "file": recording_file,
+                    "success": True,
+                    "n_bursts": stats["n_bursts"],
+                    "burst_rate_hz": stats["burst_rate_hz"],
+                    "num_spikes": int(sum(len(s) for s in spike_data.values())),
+                }
+            )
+        except Exception as exc:  # pragma: no cover - defensive, mirrors LIF
+            import traceback
+
+            traceback.print_exc()
+            session_metadata["recordings"].append(
+                {"index": rec_idx, "file": None, "success": False, "error": str(exc)}
+            )
+
+    metadata_file = os.path.join(session_dir, "session_metadata.json")
+    with open(metadata_file, "w", encoding="utf-8") as handle:
+        json.dump(session_metadata, handle, indent=2, default=str)
+
+    print(f"\nSESSION COMPLETE -> {session_dir}")
+    return session_metadata, session_dir

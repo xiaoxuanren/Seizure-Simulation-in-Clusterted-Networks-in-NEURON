@@ -1,0 +1,51 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# --- NEURON compiled mechanisms (build artifacts; keep only the .mod source) ---
+x86_64/
+arm64/
+aarch64/
+i686/
+umac/
+nrnmech.dll
+*.dll
+neuron_simulation/mechanisms/*.c
+neuron_simulation/mechanisms/*.o
+neuron_simulation/mechanisms/mod_func.*
+neuron_simulation/mechanisms/.tmp*
+
+# --- Simulation output / data folders ---
+NEURON data/
+NEURON_data/
+data/
+sessions/
+
+# --- Inference output directories ---
+learned_lif_outputs/
+voltage_augmented_learned_lif_outputs/
+ccg_outputs/
+correlation_outputs/
+inference_outputs/
+
+# --- Voltage sidecars & large artifacts ---
+*.h5
+*.hdf5
+
+# --- Generated plots ---
+*.png
+*.pdf
+*.svg
+!docs/**/*.png
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

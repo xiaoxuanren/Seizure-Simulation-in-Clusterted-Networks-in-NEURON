@@ -1,0 +1,233 @@
+"""Single-compartment Hodgkin-Huxley + A-current cell builders.
+
+This module is the NEURON biophysical analogue of the LIF project's
+``models.py``. Instead of a reduced integrate-and-fire point neuron it builds a
+single-compartment soma with:
+
+* NEURON's built-in ``hh`` mechanism (fast Na+, delayed-rectifier K+, leak), and
+* the custom ``kA`` mechanism (A-type / Kv4-like transient K+ current), whose
+  ``gbar`` is the 4-AP knob (see :mod:`neuron_simulation.states`).
+
+Excitatory and inhibitory cells share the same membrane machinery; they differ
+only in their default A-current density and in the sign of the synapses they
+*make* (enforced elsewhere by Dale's law). Every cell also carries its own
+spike detector so the simulator can read spike times without post-processing
+the voltage trace.
+
+The compiled mechanisms (``kA``, ``DepSyn``) must be built first with
+``nrnivmodl mechanisms`` -- see ``mechanisms/README.md``. Call
+:func:`load_mechanisms` once before constructing any cell.
+"""
+
+import os
+
+from neuron import h
+
+# NEURON's standard run library provides ``finitialize``/``continuerun``.
+h.load_file("stdrun.hoc")
+
+
+# --------------------------------------------------------------------------- #
+# Mechanism loading
+# --------------------------------------------------------------------------- #
+def _mechanism_available(name="kA"):
+    """Return whether a density mechanism is already registered with NEURON.
+
+    Args:
+        name: Name of the density mechanism to probe (default ``"kA"``).
+
+    Returns:
+        ``True`` if a throwaway section can insert ``name`` (i.e. the compiled
+        mechanism is already loaded), otherwise ``False``.
+    """
+    try:
+        probe = h.Section(name="_mech_probe")
+        try:
+            probe.insert(name)
+            return True
+        finally:
+            del probe
+    except Exception:
+        return False
+
+
+def load_mechanisms(mechanisms_dir=None):
+    """Load the compiled ``kA``/``DepSyn`` mechanisms exactly once.
+
+    NEURON auto-loads a ``nrnmech.dll`` found in the current working directory,
+    so this helper first checks whether the mechanisms are already registered
+    and returns quietly if so (re-loading the same mechanisms raises a HOC
+    "name already exists" error). Otherwise it searches the package directory,
+    the ``mechanisms/`` sub-directory, and the working directory for a compiled
+    artifact and loads it in a platform-appropriate way.
+
+    Args:
+        mechanisms_dir: Optional explicit directory containing the compiled
+            mechanisms (a ``nrnmech.dll`` on Windows or an ``x86_64``/``arm64``
+            build sub-directory on Linux/macOS). Defaults to the ``mechanisms``
+            folder next to this module.
+
+    Returns:
+        None.
+
+    Raises:
+        RuntimeError: If no compiled mechanisms can be found or loaded. The
+            message points at ``nrnivmodl mechanisms``.
+    """
+    if _mechanism_available("kA"):
+        return
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    if mechanisms_dir is None:
+        mechanisms_dir = os.path.join(here, "mechanisms")
+
+    # Windows: look for an explicit nrnmech.dll to load with nrn_load_dll.
+    dll_candidates = [
+        os.path.join(here, "nrnmech.dll"),
+        os.path.join(mechanisms_dir, "nrnmech.dll"),
+        os.path.join(os.getcwd(), "nrnmech.dll"),
+    ]
+    for dll in dll_candidates:
+        if os.path.exists(dll):
+            h.nrn_load_dll(dll)
+            if _mechanism_available("kA"):
+                return
+
+    # Linux/macOS: neuron.load_mechanisms() consumes the directory that holds
+    # the compiled build sub-folder and tracks already-loaded directories.
+    import neuron
+
+    for directory in (here, mechanisms_dir, os.getcwd()):
+        try:
+            if neuron.load_mechanisms(directory):
+                if _mechanism_available("kA"):
+                    return
+        except Exception:
+            continue
+
+    raise RuntimeError(
+        "Compiled kA/DepSyn mechanisms not found. Build them first with "
+        "`nrnivmodl mechanisms` from the neuron_simulation/ directory "
+        "(see mechanisms/README.md)."
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Default biophysical parameters
+# --------------------------------------------------------------------------- #
+#: Default A-current density (S/cm2) for the "normal" (drug-free) state. This is
+#: the value reduced to emulate a partial 4-AP block (see states.py).
+DEFAULT_GBAR_KA = 0.006
+#: Inhibitory cells carry a slightly weaker A-current so they recruit a touch
+#: earlier than excitatory cells, matching fast-spiking interneuron behaviour.
+DEFAULT_GBAR_KA_INH = 0.004
+
+
+class Cell:
+    """A single-compartment HH + A-current neuron with a built-in spike detector.
+
+    The soma is a 20 x 20 um cylinder carrying the ``hh`` and ``kA`` density
+    mechanisms. Recurrent and background synapses are *not* created here; the
+    network builder attaches one point-process synapse per incoming connection
+    so that short-term depression and the ground-truth wiring stay per-edge.
+
+    Args:
+        gid: Global integer id, consistent with the topology and saved outputs.
+        is_inhibitory: Whether this cell is an inhibitory interneuron. Only the
+            default A-current density differs; the sign of the synapses the cell
+            *makes* is enforced by the network builder (Dale's law).
+        gbar_kA: A-current density (S/cm2). Defaults to :data:`DEFAULT_GBAR_KA`
+            for excitatory cells and :data:`DEFAULT_GBAR_KA_INH` for inhibitory
+            cells. This is the pharmacological 4-AP target.
+        spike_threshold: Membrane voltage (mV) whose upward crossing the built-in
+            ``NetCon`` records as a spike time.
+        cluster_id: Optional cluster index carried for bookkeeping/metadata.
+
+    Returns:
+        An initialized ``Cell`` whose ``soma`` can be wired into a network.
+    """
+
+    def __init__(
+        self,
+        gid,
+        is_inhibitory=False,
+        gbar_kA=None,
+        spike_threshold=0.0,
+        cluster_id=-1,
+    ):
+        self.gid = int(gid)
+        self.is_inhibitory = bool(is_inhibitory)
+        self.cluster_id = int(cluster_id)
+
+        if gbar_kA is None:
+            gbar_kA = DEFAULT_GBAR_KA_INH if is_inhibitory else DEFAULT_GBAR_KA
+        self.gbar_kA = float(gbar_kA)
+
+        # --- membrane ---
+        self.soma = h.Section(name="soma_%d" % self.gid)
+        self.soma.L = 20.0
+        self.soma.diam = 20.0
+        self.soma.cm = 1.0
+        self.soma.Ra = 100.0
+        self.soma.insert("hh")
+        self.soma.insert("kA")
+        self.soma(0.5).kA.gbar = self.gbar_kA
+
+        # --- per-cell synapse receivers ---
+        # Incoming recurrent synapses (one point process per edge) are appended
+        # here by the network builder; the background-noise synapse is created
+        # by noise.py. Kept as lists so the whole graph stays introspectable.
+        self.recurrent_synapses = []
+        self.netcons = []
+        self.noise = None
+
+        # --- spike detector ---
+        self.spike_times = h.Vector()
+        self._spike_detector = h.NetCon(self.soma(0.5)._ref_v, None, sec=self.soma)
+        self._spike_detector.threshold = float(spike_threshold)
+        self._spike_detector.record(self.spike_times)
+
+    def set_gbar_kA(self, gbar_kA):
+        """Set the A-current density (the 4-AP knob) for this cell.
+
+        Args:
+            gbar_kA: New A-current density in S/cm2.
+
+        Returns:
+            None. The soma's ``kA.gbar`` is updated in place.
+        """
+        self.gbar_kA = float(gbar_kA)
+        self.soma(0.5).kA.gbar = self.gbar_kA
+
+    def get_spike_times(self):
+        """Return the recorded spike times as a plain list of milliseconds.
+
+        Args:
+            None.
+
+        Returns:
+            A list of spike times (ms). Empty until the simulation has run.
+        """
+        return list(self.spike_times)
+
+
+def build_cell(gid, is_inhibitory=False, gbar_kA=None, cluster_id=-1, spike_threshold=0.0):
+    """Construct one HH + A-current cell (thin wrapper over :class:`Cell`).
+
+    Args:
+        gid: Global integer id for the cell.
+        is_inhibitory: Whether to build an inhibitory interneuron.
+        gbar_kA: Optional A-current density override in S/cm2.
+        cluster_id: Optional cluster index carried into the cell for metadata.
+        spike_threshold: Spike-detection voltage threshold in mV.
+
+    Returns:
+        An initialized :class:`Cell`.
+    """
+    return Cell(
+        gid,
+        is_inhibitory=is_inhibitory,
+        gbar_kA=gbar_kA,
+        cluster_id=cluster_id,
+        spike_threshold=spike_threshold,
+    )
