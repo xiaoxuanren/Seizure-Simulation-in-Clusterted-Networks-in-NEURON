@@ -87,12 +87,13 @@ def build_network(
     e_inh=-75.0,
     syn_delay=1.5,
     spike_threshold=0.0,
-    exc_weight_scale=1.0,
-    inh_weight_scale=1.0,
-    noise_rate=18.0,
-    noise_weight=0.0016,
+    exc_weight_scale=4.0,
+    inh_weight_scale=1.5,
+    noise_rate=2.0,
+    noise_weight=0.0008,
     noise_tau=3.0,
     noise_seed=1000,
+    tau_k=200.0,
     kA_globals=None,
 ):
     """Instantiate a NEURON network from a topology dict.
@@ -122,6 +123,11 @@ def build_network(
         noise_weight: Background synaptic weight (uS).
         noise_tau: Background excitatory conductance decay (ms).
         noise_seed: Base seed for the per-neuron Poisson streams.
+        tau_k: Extracellular-K+ clearance time constant (ms) written to every
+            cell's ``kdyn`` mechanism -- the SEIZURE knob. Small (~200 ms) = strong
+            glial buffering -> [K+]o stays ~4 mM -> discrete bursts; large
+            (~2500 ms) = impaired clearance -> [K+]o accumulates -> seizure.
+            Ignored if ``kdyn`` is not inserted.
         kA_globals: Optional mapping of ``kA`` GLOBAL parameter names (without
             the ``_kA`` suffix, e.g. ``{"vhalfm": -50}``) to values, applied
             before building cells. Lets callers tune A-current kinetics without
@@ -146,15 +152,20 @@ def build_network(
     cells = []
     for gid in range(n_neurons):
         inhibitory = bool(is_inh[gid])
-        cells.append(
-            build_cell(
-                gid,
-                is_inhibitory=inhibitory,
-                gbar_kA=gbar_kA_inh if inhibitory else gbar_kA_exc,
-                cluster_id=int(cluster_assignments[gid]),
-                spike_threshold=spike_threshold,
-            )
+        cell = build_cell(
+            gid,
+            is_inhibitory=inhibitory,
+            gbar_kA=gbar_kA_inh if inhibitory else gbar_kA_exc,
+            cluster_id=int(cluster_assignments[gid]),
+            spike_threshold=spike_threshold,
         )
+        # Extracellular-K+ clearance rate (the seizure knob). Guarded so this is
+        # a no-op if the kdyn mechanism is not inserted (e.g. before the upgrade).
+        try:
+            cell.soma(0.5).kdyn.tau_k = float(tau_k)
+        except AttributeError:
+            pass
+        cells.append(cell)
 
     # --- recurrent synapses (one point process + NetCon per edge) ---
     effective_d = float(depression_d) if depression else 0.0
@@ -208,6 +219,7 @@ def build_network(
         "noise_weight": float(noise_weight),
         "noise_tau": float(noise_tau),
         "noise_seed": int(noise_seed),
+        "tau_k": float(tau_k),
         "kA_globals": dict(kA_globals) if kA_globals else {},
     }
     print(

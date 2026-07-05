@@ -12,19 +12,20 @@ Biophysics
     h : slow, voltage-gated INACTIVATION gate (closes on depolarization and
         recovers slowly at rest)
 
-The slow inactivation/recovery of ``h`` (time constant ``htau0``, hundreds of
-ms) is what lets this current act as the network-burst PACEMAKER/TERMINATOR:
-during a synchronized burst the sustained depolarization inactivates the
-current, and its slow de-inactivation at rest imposes a refractory-like gap
-before the next burst can ignite.
+The inactivation ``h`` (time constant ``htau0``, default 20 ms) shapes the
+fast transient outward current that helps sculpt crisp, discrete bursts. (An
+earlier 300 ms "slow pacer" variant is deprecated -- it gave mushier bursts.)
 
-The 4-AP knob
-    ``gbar`` (S/cm2) is the pharmacological target of 4-aminopyridine (4-AP).
-    Normal ~0.006 S/cm2. A 4-AP application is modelled as a PARTIAL reduction
-    of ``gbar`` (e.g. 0.0045-0.005 S/cm2). Do NOT drop ``gbar`` to (near) zero:
-    a strong block removes the burst terminator entirely and collapses the
-    discrete network bursts into continuous firing. There is a dose window in
-    which burst frequency rises before the bursts merge -- see
+NOTE: on the realistic log-normal topology, reducing ``gbar`` does NOT
+faithfully reproduce seizure. The mechanistically correct seizure route is
+dynamic [K+]o accumulation (see kdyn.mod); reduced-``gbar`` is retained only as
+a phenomenological knob.
+
+The gbar knob (phenomenological / deprecated as a 4-AP model)
+    ``gbar`` (S/cm2) is nominally the target of 4-aminopyridine (4-AP).
+    Normal ~0.006 S/cm2. A partial reduction of ``gbar`` (e.g. 0.0045-0.005
+    S/cm2) shifts burst frequency, but on the realistic topology the sign and
+    magnitude of that effect are not a faithful 4-AP model -- see
     ``neuron_simulation/states.py``.
 
 Temperature
@@ -60,7 +61,9 @@ PARAMETER {
     vhalfh = -60   (mV)     : inactivation half-voltage (slow gate)
     kh     = 6     (mV)     : inactivation slope factor
     mtau0  = 1.0   (ms)     : activation time constant at temp (fast)
-    htau0  = 300   (ms)     : inactivation time constant at temp (slow pacer)
+    htau0  = 20    (ms)     : inactivation time constant at temp (fast -> crisp
+                            : discrete bursts; 300 ms slow-pacer variant gave
+                            : mushier bursts and is deprecated)
     q10    = 3              : temperature sensitivity of the gating kinetics
     temp   = 6.3   (degC)   : reference temperature for mtau0/htau0
 }
