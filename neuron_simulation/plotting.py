@@ -285,3 +285,71 @@ def plot_burst_frequency_curve(param_values, burst_rates, param_label="gbar_kA (
     ax.legend(fontsize=8)
     fig.tight_layout()
     return fig
+
+
+def plot_raster_with_ko(
+    spike_data,
+    n_neurons,
+    duration_ms,
+    ko_data,
+    is_inhibitory=None,
+    cluster_assignments=None,
+    burn_in_ms=0.0,
+    title="Raster + [K+]o",
+):
+    """Plot a cluster-sorted raster with mean extracellular [K+]o(t) underneath.
+
+    This is the seizure read-out: the bottom panel shows mean [K+]o across
+    neurons (with the min-max band). In the normal state [K+]o stays near 4 mM;
+    in a seizure state it accumulates into the ictal range (~8-12 mM).
+
+    Args:
+        spike_data: Mapping from neuron id to spike times in milliseconds.
+        n_neurons: Total number of neurons.
+        duration_ms: Recording duration in milliseconds.
+        ko_data: The ``ko_data`` dict returned by
+            :func:`neuron_simulation.simulation.run_simulation` (or
+            ``run_single_state``), with ``times``/``mean_ko``/``min_ko``/``max_ko``.
+        is_inhibitory: Optional ``(N,)`` boolean array (inhibitory spikes red).
+        cluster_assignments: Optional ``(N,)`` cluster index for row sorting.
+        burn_in_ms: Startup transient marked with a vertical dashed line.
+        title: Figure title.
+
+    Returns:
+        The Matplotlib ``Figure``.
+    """
+    if is_inhibitory is None:
+        is_inhibitory = np.zeros(n_neurons, dtype=bool)
+    order = np.arange(n_neurons)
+    if cluster_assignments is not None:
+        order = np.argsort(cluster_assignments, kind="stable")
+    row_of = {nid: row for row, nid in enumerate(order)}
+
+    fig, (ax_r, ax_k) = plt.subplots(
+        2, 1, figsize=(11, 7), sharex=True, gridspec_kw={"height_ratios": [3, 1]}
+    )
+    for nid, spikes in spike_data.items():
+        s = np.asarray(spikes, dtype=float)
+        if s.size == 0:
+            continue
+        y = np.full(s.shape, row_of[nid])
+        color = _INH_COLOR if is_inhibitory[nid] else _EXC_COLOR
+        ax_r.scatter(s, y, s=1.5, c=color, marker="|", linewidths=0.5)
+    ax_r.set_ylabel("neuron (cluster-sorted)")
+    ax_r.set_title(title)
+    ax_r.set_ylim(-1, n_neurons)
+
+    times = np.asarray(ko_data["times"], dtype=float)
+    ax_k.fill_between(times, ko_data["min_ko"], ko_data["max_ko"], color="#c0392b", alpha=0.2,
+                      label="min-max across neurons")
+    ax_k.plot(times, ko_data["mean_ko"], color="#c0392b", lw=1.2, label="mean [K+]o")
+    ax_k.axhline(4.0, color="k", ls=":", lw=1, label="rest (4 mM)")
+    ax_k.set_ylabel("[K+]o (mM)")
+    ax_k.set_xlabel("time (ms)")
+    ax_k.legend(fontsize=7, loc="upper right")
+
+    if burn_in_ms > 0:
+        for ax in (ax_r, ax_k):
+            ax.axvline(burn_in_ms, color="green", ls="--", lw=1, alpha=0.7)
+    fig.tight_layout()
+    return fig

@@ -18,6 +18,7 @@ from datetime import datetime
 from . import states as states_module
 from .analysis import burst_statistics, detect_network_bursts
 from .io import save_network_structure, save_recording_data
+from .noise import reseed_noise
 from .network_builder import build_network
 from .simulation import run_simulation
 from .topology import build_topology, build_topology_lognormal
@@ -32,12 +33,13 @@ def run_single_state(
     discard_transient_ms=1000.0,
     record_voltage=False,
     voltage_dt=1.0,
+    record_ko=True,
     noise_seed=1000,
 ):
     """Build a network in one pharmacological state, run it, and detect bursts.
 
-    Intended for interactive verification and normal-vs-4-AP comparisons; nothing
-    is written to disk.
+    Intended for interactive verification and normal-vs-seizure comparisons;
+    nothing is written to disk. Records mean [K+]o by default for seizure plots.
 
     Args:
         topology: A topology dict from :mod:`neuron_simulation.topology`.
@@ -62,29 +64,34 @@ def run_single_state(
     state_name = "custom"
     if state is not None:
         state_name = state.get("state_name", "custom")
-        for key in ("gbar_kA_exc", "gbar_kA_inh"):
+        for key in ("gbar_kA_exc", "gbar_kA_inh", "tau_k"):
             if key in state:
                 build_kwargs[key] = state[key]
 
     network = build_network(topology, **build_kwargs)
-    spike_data, voltage_data = run_simulation(
+    spike_data, voltage_data, ko_data = run_simulation(
         network,
         duration=duration,
         dt=dt,
         discard_transient_ms=discard_transient_ms,
         record_voltage=record_voltage,
         voltage_dt=voltage_dt,
+        record_ko=record_ko,
     )
     bursts = detect_network_bursts(spike_data, network.n_neurons, duration, burn_in_ms=0.0)
     stats = burst_statistics(bursts, duration, burn_in_ms=0.0)
+    ko_note = ""
+    if ko_data is not None:
+        ko_note = f", [K+]o {ko_data['mean_ko'].min():.1f}-{ko_data['mean_ko'].max():.1f} mM"
     print(
         f"[{state_name}] {stats['n_bursts']} network bursts "
         f"({stats['burst_rate_hz']:.2f} Hz), mean participation "
-        f"{stats['mean_participation']:.2f}"
+        f"{stats['mean_participation']:.2f}{ko_note}"
     )
     return {
         "spike_data": spike_data,
         "voltage_data": voltage_data,
+        "ko_data": ko_data,
         "bursts": bursts,
         "burst_stats": stats,
         "network": network,
@@ -156,8 +163,9 @@ def generate_dataset(
         save_dir: Root output directory for the session bundle.
         participation_threshold: Fraction of neurons required for a network burst
             (used when tagging saved burst windows).
-        noise_seed_base: Base Poisson seed; recording ``r`` uses
-            ``noise_seed_base + 1000 * r`` per neuron.
+        noise_seed_base: Base Poisson seed; neuron ``gid`` in recording ``r``
+            draws from the independent stream ``Random123(noise_seed_base, gid,
+            r)``, so recordings are distinct trials rather than duplicates.
         topology_seed: Seed for the topology builder.
 
     Returns:
@@ -168,7 +176,7 @@ def generate_dataset(
     build_kwargs = dict(build_kwargs or {})
     if state is None:
         state = states_module.normal_state()
-    for key in ("gbar_kA_exc", "gbar_kA_inh"):
+    for key in ("gbar_kA_exc", "gbar_kA_inh", "tau_k"):
         if key in state:
             build_kwargs.setdefault(key, state[key])
 
@@ -227,12 +235,13 @@ def generate_dataset(
 
     for rec_idx in range(n_recordings):
         print(f"\n--- recording {rec_idx + 1}/{n_recordings} ---")
-        # Re-seed the Poisson background so each recording is an independent trial.
-        for i, gen in enumerate(network.noise):
-            gen.stim.seed(noise_seed_base + 1000 * rec_idx + i)
+        # Re-key every neuron's Poisson stream on the recording index so each
+        # recording is a genuinely different (yet reproducible) trial. Each
+        # generator's stream is Random123(base_seed, gid, rec_idx).
+        reseed_noise(network.noise, rec_idx)
 
         try:
-            spike_data, voltage_data = run_simulation(
+            spike_data, voltage_data, _ko_data = run_simulation(
                 network,
                 duration=recording_duration,
                 dt=dt,

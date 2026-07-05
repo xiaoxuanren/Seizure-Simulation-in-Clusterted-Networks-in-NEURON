@@ -53,10 +53,13 @@ class NeuronWeightParameters:
 
     def __init__(self):
         # Peak conductances in microsiemens (uS). 1e-3 uS = 1 nS.
-        self.within_exc_range = (0.0010, 0.0022)
-        self.between_exc_range = (0.0008, 0.0016)
-        self.within_inh_range = (0.0025, 0.0055)
-        self.between_inh_range = (0.0020, 0.0040)
+        # Trimmed ~2x from the original ranges as part of the weight
+        # recalibration so single EPSPs stay subthreshold (see build_network's
+        # tuned defaults noise_weight=0.0008, exc/inh_weight_scale=1.5).
+        self.within_exc_range = (0.0005, 0.0011)
+        self.between_exc_range = (0.0004, 0.0008)
+        self.within_inh_range = (0.00125, 0.00275)
+        self.between_inh_range = (0.0010, 0.0020)
         self.use_lognormal = True
         self.lognormal_sigma = 0.5
 

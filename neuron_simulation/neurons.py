@@ -173,6 +173,14 @@ class Cell:
         self.soma.insert("kA")
         self.soma(0.5).kA.gbar = self.gbar_kA
 
+        # Dynamic extracellular K+ (kdyn) writes ek from [K+]o, which hh/kA read.
+        # This is the seizure substrate: firing raises [K+]o -> ek depolarizes ->
+        # positive feedback; glial clearance (tau_k, set by the network builder)
+        # is the negative feedback. ki defaults to 72 mM so resting E_K = -77 mV,
+        # matching the tuned regime. (Physically cleaner: ki=140 -> E_K_rest
+        # ~-94 mV, but then re-tune exc_weight_scale up ~1.5x.)
+        self.soma.insert("kdyn")
+
         # --- per-cell synapse receivers ---
         # Incoming recurrent synapses (one point process per edge) are appended
         # here by the network builder; the background-noise synapse is created
