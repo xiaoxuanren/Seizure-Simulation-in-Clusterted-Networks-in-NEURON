@@ -140,27 +140,42 @@ python inference/adapter.py latest        # CCG + learned-LIF, reports AUC / FDR
 
 ### Tuned defaults (validated)
 
-The `build_network` defaults were recalibrated (see *Two bug fixes* below) so a
-**single background event is subthreshold** and the network integrates rather
-than chain-reacting:
+The `build_network` defaults keep the **single background (noise) event
+subthreshold** so the network integrates rather than chain-reacting from noise:
 
 | parameter | default | role |
 |-----------|---------|------|
-| `noise_weight` | `0.0008` µS | single EPSP ≈ 5.6 mV (subthreshold) |
-| `noise_rate` | `2.0` Hz | sparse ignition seed |
-| `exc_weight_scale` | `4.0` | recurrent gain (near-critical ignition) |
+| `noise_weight` | `0.0008` µS | single noise EPSP ≈ 5.6 mV (subthreshold) |
+| `noise_rate` | `2.5` Hz | sparse ignition seed |
+| `exc_weight_scale` | `1.5` | recurrent gain |
 | `inh_weight_scale` | `1.5` | recurrent inhibition |
 | `htau0_kA` | `20 ms` | fast A-current inactivation (crisp bursts) |
 | `tau_k` | `200 ms` (normal) | K⁺ clearance (seizure knob) |
 
-**Verified normal state:** mean rate **2.9 Hz**, network bursts (**99%
-participation**) at **1.3 Hz**, **86% of spikes in bursts**, [K⁺]ₒ ≈ 4.0–4.4 mM.
+**Verified normal state:** mean rate **2.6 Hz**, network bursts (**93%
+participation**) at **1.5 Hz**, ~**77% of spikes in bursts**, [K⁺]ₒ ≈ 4.0–4.2 mM.
 
-> The originally-suggested `noise_rate = 5.0` / `exc_weight_scale = 1.5` did not
-> satisfy the ">80% of spikes in bursts" gate on the realistic log-normal
-> topology (5 Hz noise drove a dense tonic baseline); `2.0` / `4.0` do. The
-> subthreshold-EPSP fix (`noise_weight = 0.0008`) and `htau0 = 20 ms` are kept as
-> specified.
+### Recurrent coupling and the sharp HH threshold (honest caveat)
+
+The single-compartment HH point-neuron has a **razor-sharp single-event
+rheobase** (~`0.00085 µS` ≈ a 6 mV peak EPSP): a synaptic event is either
+**≤ 5.6 mV (subthreshold)** or triggers a **full ~101 mV spike** — there is no
+"moderately suprathreshold" middle. Consequently:
+
+- A single **noise** event (`0.0008 µS`) is subthreshold (~5.6 mV) — noise
+  integrates, it does not detonate.
+- A single **recurrent** excitatory event, at any weight strong enough to sustain
+  network bursts, is **suprathreshold** (fires the postsynaptic cell). We verified
+  by sweep (density 0.04–0.12, `exc_tau` 3–6 ms, `noise_rate` 2–30 Hz, `tau_d`
+  250–800 ms) that a **genuinely subthreshold recurrent weight set does NOT
+  sustain bursts** — the network is silent at low noise and asynchronously tonic
+  at high noise. So **subthreshold recurrent coupling and the burst gate are
+  mutually exclusive** in this cell.
+
+The recurrent weights were nonetheless **reduced** from the earlier calibration
+(`exc_weight_scale` 4.0 → 1.5) to the minimum that still bursts. Making them fully
+subthreshold would require a better-integrating cell (e.g. a multi-compartment
+neuron), which is out of scope here.
 
 ### The seizure mechanism (K⁺ accumulation)
 
@@ -185,8 +200,11 @@ A-current:
 1. **Mis-calibrated weights → hyperexcitability.** Previously a single background
    event (`noise_weight = 0.0016 µS`) caused a ~103 mV deflection — one
    presynaptic spike was suprathreshold, so the network chain-reacted to
-   near-continuous firing and swamped the A-current. Fixed by the tuned defaults
-   above (single EPSP now ~5.6 mV subthreshold).
+   near-continuous firing and swamped the A-current. The **noise** weight is now
+   `0.0008 µS` (single noise EPSP ~5.6 mV, subthreshold), and the **recurrent**
+   gain was reduced (`exc_weight_scale` 4.0 → 1.5). See *Recurrent coupling and
+   the sharp HH threshold* above for why the recurrent EPSP remains suprathreshold
+   in any bursting regime (an intrinsic property of this HH point-neuron).
 2. **Per-recording noise seed had no effect → identical recordings.** The old
    `NetStim.seed()` path produced byte-identical recordings. Each generator now
    draws from a `Random123(base_seed, gid, recording_index)` stream via
@@ -241,13 +259,22 @@ inference mode. The **ground truth is the exact wired graph** (the `connections`
 table). The first ~1 s startup transient is discarded at save time, so inference
 sees steady-state data.
 
-**Verified end-to-end** on a regenerated session with the tuned defaults (148
-neurons, log-normal topology, 3×15 s recordings): the learned-LIF model reached
-**AUC ≈ 0.80** and the CCG baseline **AUC ≈ 0.75** against the ground-truth
-wiring, straight out of the vendored pipeline. (FDR at the chosen threshold is
-high, ~0.6, because the clean bursting leaves sparse inter-burst spikes — AUC,
-which is threshold-free, is the meaningful score here, and it is well above the
-0.5 chance level.)
+**Verified end-to-end** on the deliverable session (148 neurons, log-normal
+topology, 20×60 s recordings): the learned-LIF and CCG models run against NEURON
+output straight out of the vendored pipeline, scoring AUC well above the 0.5
+chance level. See PR #1 for the exact learned-LIF and CCG AUCs, including the CCG
+baseline **with and without burst exclusion** (burst-dominated recordings are
+where CCG can inflate from common-input confounds).
+
+**On the FDR (~0.6).** A high FDR alongside a good AUC does **not** mean "AUC is
+insensitive to sparse spikes" — that conflates two things. It means the model
+*ranks* edges well (good AUC) but the **surrogate-derived threshold is
+miscalibrated**: too many false positives are admitted at the chosen cutoff. This
+is the **same, still-open surrogate-FDR calibration problem already documented in
+the LIF project** (where the true FDR was ~0.63 at the chosen threshold), carried
+over here unchanged — not a new NEURON-specific artifact, and not "expected/fine."
+Fixing it is threshold-calibration work in the inference package, independent of
+the simulator.
 
 ### Session layout (must match the LIF pipeline exactly)
 
