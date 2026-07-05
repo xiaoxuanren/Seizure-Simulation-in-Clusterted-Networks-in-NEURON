@@ -1,10 +1,11 @@
 # NMODL mechanisms
 
-Two custom NEURON mechanisms back the biophysics of this project:
+Three custom NEURON mechanisms back the biophysics of this project:
 
 | File | Mechanism | Role |
 |------|-----------|------|
-| `kA.mod` | `kA` (density) | A-type / Kv4-like transient K⁺ current. **`gbar_kA` is the 4-AP knob.** |
+| `kA.mod` | `kA` (density) | A-type / Kv4-like transient K⁺ current (`htau0 = 20 ms`); shapes crisp bursts. |
+| `kdyn.mod` | `kdyn` (density) | Dynamic [K⁺]ₒ accumulation → writes `ek` (Nernst). **`tau_k` is the seizure knob.** |
 | `DepSyn.mod` | `DepSyn` (point process) | Depressing excitatory synapse (short-term depression; `d=0` ⇒ static). |
 
 Inhibitory synapses use NEURON's built-in `ExpSyn` (reversal −75 mV) and the
@@ -46,16 +47,18 @@ rm -f nrnmech.dll mechanisms/*.c mechanisms/*.o mechanisms/mod_func.*
 The generated build artifacts (`x86_64/`, `nrnmech.dll`, `*.c`, `*.o`) are
 git-ignored — only the `.mod` source is tracked.
 
-## The 4-AP mapping (important)
+## The seizure knob is `tau_k` (K⁺ clearance), not `gbar_kA`
 
-`gbar_kA` is the A-current density in S/cm². 4-aminopyridine (4-AP) blocks
-A-type K⁺ channels, so 4-AP is modelled as a **partial reduction** of `gbar_kA`:
+Seizure is modelled with `kdyn`: firing raises [K⁺]ₒ → `ek` depolarizes (Nernst)
+→ positive feedback. Glial/diffusive clearance (`tau_k`) is the negative feedback.
 
-- Normal (drug-free): `gbar_kA ≈ 0.006` S/cm² → discrete network bursts.
-- 4-AP (partial block): reduce toward ~`0.0045–0.005` S/cm² → bursts become
-  **more frequent** (there is a dose window where burst frequency rises).
-- **Do not** drop `gbar_kA` near zero: a strong block removes the burst
-  terminator and collapses discrete bursts into continuous firing.
+- Normal: `tau_k = 200 ms` (strong buffering) → [K⁺]ₒ ~4 mM → discrete bursts.
+- Seizure: `tau_k = 2500 ms` (impaired buffering) → [K⁺]ₒ climbs to ~12 mM →
+  ictal runaway. `ki = 72 mM` fixes resting E_K = −77 mV.
 
-See `neuron_simulation/states.py` for the `normal_state` / `four_ap_state`
-helpers and the dose-response sweep.
+`gbar_kA` (A-current density, S/cm²) is retained only as a **phenomenological**
+knob (`states.gbar_block_state`), **not** a faithful 4-AP model: on the realistic
+log-normal topology, reducing it does not reproduce the seizure phenotype.
+
+See `neuron_simulation/states.py` for `normal_state` / `seizure_state` /
+`seizure_dose_response` (and the deprecated `gbar_block_state`).
