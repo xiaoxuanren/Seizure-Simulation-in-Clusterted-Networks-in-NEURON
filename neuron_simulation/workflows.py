@@ -233,6 +233,35 @@ def generate_dataset(
         "recordings": [],
     }
 
+    # --- topology overview figure + connection stats (saved once) ---
+    # Guarded and lazily imported so matplotlib stays optional for headless
+    # data generation; a plotting failure must never break the dataset.
+    try:
+        from . import plotting
+        import matplotlib.pyplot as _plt
+
+        topo_stats = plotting.cluster_connection_stats(
+            topology["connections"],
+            topology["cluster_assignments"],
+            topology["n_neurons"],
+        )
+        print(plotting.format_topology_stats(topo_stats))
+        _fig = plotting.plot_topology_overview(
+            topology["neuron_positions"],
+            topology["connections"],
+            topology["cluster_assignments"],
+            is_inhibitory=topology.get("neuron_is_inhibitory"),
+        )
+        topology_figure = os.path.join(session_dir, f"topology_{timestamp}.png")
+        _fig.savefig(topology_figure, dpi=130, facecolor="white", bbox_inches="tight")
+        _plt.close(_fig)
+        session_metadata["topology_stats"] = topo_stats
+        session_metadata["topology_figure"] = topology_figure
+        print(f"  topology figure -> {topology_figure}")
+    except Exception as exc:  # pragma: no cover - never break generation
+        print(f"  [warn] topology overview skipped: {exc}")
+        session_metadata["topology_stats"] = None
+
     for rec_idx in range(n_recordings):
         print(f"\n--- recording {rec_idx + 1}/{n_recordings} ---")
         # Re-key every neuron's Poisson stream on the recording index so each
@@ -274,10 +303,33 @@ def generate_dataset(
                 burst_windows=burst_windows,
                 interburst_windows=interburst_windows,
             )
+            # per-recording raster (spike + population panel + burst shading)
+            raster_file = None
+            try:
+                from . import plotting as _plotting
+                import matplotlib.pyplot as _plt
+
+                _rfig = _plotting.plot_raster(
+                    spike_data,
+                    network.n_neurons,
+                    recording_duration,
+                    is_inhibitory=topology.get("neuron_is_inhibitory"),
+                    cluster_assignments=topology["cluster_assignments"],
+                    burn_in_ms=0.0,
+                    title=f"recording {rec_idx:03d} - {state.get('state_name')}",
+                )
+                raster_file = os.path.join(session_dir, f"recording{rec_idx:03d}_raster.png")
+                _rfig.savefig(raster_file, dpi=120, facecolor="white", bbox_inches="tight")
+                _plt.close(_rfig)
+                print(f"  raster -> {raster_file}")
+            except Exception as exc:  # pragma: no cover - never break generation
+                print(f"  [warn] raster skipped: {exc}")
+
             session_metadata["recordings"].append(
                 {
                     "index": rec_idx,
                     "file": recording_file,
+                    "raster": raster_file,
                     "success": True,
                     "n_bursts": stats["n_bursts"],
                     "burst_rate_hz": stats["burst_rate_hz"],
