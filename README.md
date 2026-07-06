@@ -1,13 +1,19 @@
 # Seizure Simulation in Clustered Networks (NEURON)
 
-A biophysical spiking-network model of spontaneous **network bursts** (a
-seizure-like synchronization) in a clustered culture, built in
+A biophysical spiking-network model of spontaneous **network bursts** and their
+transition into a **seizure (ictal) state**, in a clustered culture built in
 [NEURON](https://neuron.yale.edu/). Single-compartment Hodgkin–Huxley neurons
-carry a custom **A-type / Kv4-like potassium current** whose density `gbar_kA`
-is the pharmacological knob for **4-aminopyridine (4-AP)**. The network is driven
-only by weak per-neuron Poisson background input and produces discrete,
-high-participation network bursts whose frequency rises as the A-current is
-partially blocked.
+carry a custom **A-type / Kv4-like potassium current** (`kA`) and a **dynamic
+extracellular-potassium** mechanism (`kdyn`). The network is driven only by weak
+per-neuron Poisson background input and produces discrete, high-participation
+network bursts.
+
+**The seizure knob is impaired glial K⁺ clearance (`tau_k`), not a reduced
+A-current.** Firing raises [K⁺]ₒ → the K⁺ reversal E_K depolarizes (Nernst) →
+positive feedback toward an ictal state; glial/diffusive clearance is the
+negative feedback that terminates it. Weak clearance (large `tau_k`) is the
+epilepsy model. The old reduced-`gbar_kA` "4-AP" route is **deprecated to a
+phenomenological knob** (see below).
 
 The project deliberately mirrors the companion **LIF project**
 ([LIF-Project](https://github.com/xiaoxuanren/LIF-Project),
@@ -23,15 +29,16 @@ unmodified.
 ```
 neuron_simulation/
   mechanisms/
-    kA.mod              # A-type K+ current (Kv4-like); the 4-AP target
+    kA.mod              # A-type K+ current (Kv4-like), fast htau (20 ms)
+    kdyn.mod            # dynamic [K+]o accumulation -> ek (the SEIZURE substrate)
     DepSyn.mod          # depressing excitatory synapse (short-term depression)
     README.md           # how to compile: `nrnivmodl mechanisms`
-  neurons.py            # single-compartment HH + A-current cell builders (E and I)
+  neurons.py            # single-compartment HH + kA + kdyn cell builders (E and I)
   topology.py           # clustered+hub AND log-normal-degree builders
   network_builder.py    # assemble a NEURON net from a topology (cells, synapses, NetCons, noise)
-  noise.py              # Poisson background input (NetStim -> ExpSyn) -- the sole drive
-  states.py             # normal vs 4-AP configs (gbar_kA) + dose-response helper
-  simulation.py         # run(): finitialize/continuerun, spike (+ optional voltage) recording
+  noise.py              # Poisson background (NetStim -> ExpSyn); per-recording Random123 streams
+  states.py             # normal vs seizure (tau_k) states; deprecated gbar_block knob
+  simulation.py         # run(): finitialize/continuerun, spike + optional voltage + [K+]o recording
   workflows.py          # topology->network->run->save spikes + ground truth; dataset generation
   analysis.py           # participation-based network-burst detection (post burn-in), burst stats
   plotting.py           # raster, population activity, degree distribution, topology map, comparisons
@@ -87,17 +94,15 @@ and finally runs inference on the generated data.
 from neuron_simulation import topology, workflows, states
 
 topo = topology.build_topology_lognormal(seed=1)          # preferred builder
-result = workflows.run_single_state(                       # verify bursting
-    topo, state=states.normal_state(),
-    build_kwargs=dict(noise_weight=0.0006, noise_rate=20.0, exc_weight_scale=3.0),
-)
-print(result["burst_stats"])                               # network-burst rate, participation
 
-# Generate an inference-ready dataset, then run inference:
-meta, session_dir = workflows.generate_dataset(
-    n_recordings=5, recording_duration=30000,
-    build_kwargs=dict(noise_weight=0.0006, noise_rate=20.0, exc_weight_scale=3.0),
-)
+# Normal vs seizure (the tuned defaults already give clean bursts):
+normal  = workflows.run_single_state(topo, state=states.normal_state())
+seizure = workflows.run_single_state(topo, state=states.seizure_state(1.0))
+print(normal["burst_stats"], normal["ko_data"]["mean_ko"].max())    # ~4 mM, discrete bursts
+print(seizure["ko_data"]["mean_ko"].max())                          # ~12 mM, ictal
+
+# Generate an inference-ready dataset (normal state), then run inference:
+meta, session_dir = workflows.generate_dataset(n_recordings=3, recording_duration=15000)
 ```
 
 ```bash
@@ -109,15 +114,20 @@ python inference/adapter.py latest        # CCG + learned-LIF, reports AUC / FDR
 ## The biophysics
 
 - **Neurons.** Single-compartment soma (`L = diam = 20 µm`) with NEURON's
-  built-in `hh` (Na⁺/K⁺/leak) plus the custom `kA` A-current. 80% excitatory,
-  20% inhibitory. `celsius` is configurable (default **6.3 °C**, keeping squid
-  `hh` kinetics). A **mammalian variant at 34 °C** runs automatically with faster
-  kinetics — the `kA` mechanism scales its time constants by a q10 factor.
+  built-in `hh` (Na⁺/K⁺/leak), the custom `kA` A-current, and the `kdyn` dynamic
+  [K⁺]ₒ mechanism. 80% excitatory, 20% inhibitory. `celsius` is configurable
+  (default **6.3 °C**, keeping squid `hh` kinetics); a mammalian variant at 34 °C
+  runs with faster `kA` kinetics via a q10 factor.
 
-- **A-current (`kA.mod`).** Fast voltage-gated activation `m` and **slow**
-  inactivation `h`, reversal at `ek`; `I_kA = gbar · m⁴ · h · (v − ek)`.
-  **`gbar_kA` is the 4-AP knob.** Normal ≈ **0.006 S/cm²**. 4-AP is a **partial**
-  reduction of `gbar_kA`.
+- **A-current (`kA.mod`).** Fast activation `m` and inactivation `h`
+  (`htau0 = 20 ms`), reversal at `ek`; `I_kA = gbar · m⁴ · h · (v − ek)`. It
+  shapes crisp discrete bursts. `gbar_kA` is retained only as a phenomenological
+  knob (`gbar_block_state`), **not** a faithful 4-AP model — see below.
+
+- **Dynamic [K⁺]ₒ (`kdyn.mod`).** `ek` is written from the Nernst equation on a
+  state variable `[K⁺]ₒ` that rises with K⁺ efflux (firing) and is cleared with
+  time constant `tau_k`. `ki = 72 mM` fixes resting E_K = −77 mV. **`tau_k` is
+  the seizure knob.**
 
 - **Synapses.** Excitatory synapses are `DepSyn` (short-term depression,
   `d = 0.5`, `tau_d = 800 ms`) or static (`d = 0`). Inhibitory synapses are
@@ -125,49 +135,90 @@ python inference/adapter.py latest        # CCG + learned-LIF, reports AUC / FDR
   fixes the sign of every synapse it makes.
 
 - **Drive.** Each neuron receives an independent Poisson `NetStim → ExpSyn`
-  background (~16–22 Hz). **This is the only drive** — no current injection, no
-  stimulation, no tonic drivers.
+  background. **This is the only drive** — no current injection, no stimulation,
+  no tonic drivers. Each generator uses its own reproducible `Random123` stream.
 
-### The 4-AP mapping (validated)
+### Tuned defaults (validated)
 
-`gbar_kA` sets the strength of the burst brake:
+The `build_network` defaults keep the **single background (noise) event
+subthreshold** so the network integrates rather than chain-reacting from noise:
 
-- **Normal** (`gbar_kA ≈ 0.006`): discrete, well-separated network bursts
-  (verified regime: ~2–5 Hz burst rate, ~90% participation, depending on network
-  size).
-- **4-AP, partial block** (reduce `gbar_kA` toward ~0.0045–0.005): the brake
-  weakens, so **burst frequency rises** — there is a dose window where the burst
-  rate increases with block strength.
-- **Strong block** (`gbar_kA` → 0): the terminator is gone and discrete bursts
-  **collapse into continuous firing**. 4-AP must stay in the partial regime.
+| parameter | default | role |
+|-----------|---------|------|
+| `noise_weight` | `0.0008` µS | single noise EPSP ≈ 5.6 mV (subthreshold) |
+| `noise_rate` | `2.5` Hz | sparse ignition seed |
+| `exc_weight_scale` | `1.5` | recurrent gain |
+| `inh_weight_scale` | `1.5` | recurrent inhibition |
+| `htau0_kA` | `20 ms` | fast A-current inactivation (crisp bursts) |
+| `tau_k` | `200 ms` (normal) | K⁺ clearance (seizure knob) |
 
-See `states.py` (`normal_state`, `four_ap_state`, `dose_response_gbar`).
+**Verified normal state:** mean rate **2.6 Hz**, network bursts (**93%
+participation**) at **1.5 Hz**, ~**77% of spikes in bursts**, [K⁺]ₒ ≈ 4.0–4.2 mM.
 
-### Roles of noise, the A-current, and depression
+### Recurrent coupling and the sharp HH threshold (honest caveat)
 
-- **Noise is an ignition seed, not a driver.** Alone (recurrent synapses
-  removed) it makes each neuron fire only ~0.07 Hz. Below a threshold noise level
-  the network is silent; above it, recurrent excitation ignites synchronized
-  bursts.
-- **The A-current (`gbar_kA`) controls the ignition threshold and burst
-  frequency** — it is the 4-AP knob. Reducing it raises the burst rate (see the
-  dose-response above).
-- **Short-term depression is the burst terminator / brake against runaway.** In
-  this implementation's tuned regime it is *required* to keep bursts discrete:
-  with the default recurrent strength, turning depression **off** (static
-  synapses) drives the network into **continuous ~75 Hz firing** rather than
-  discrete bursts. This is exactly the "backup brake against runaway" role the
-  spec calls out for the weakened-A-current (4-AP) state — here it is load-bearing
-  at baseline too.
+The single-compartment HH point-neuron has a **razor-sharp single-event
+rheobase** (~`0.00085 µS` ≈ a 6 mV peak EPSP): a synaptic event is either
+**≤ 5.6 mV (subthreshold)** or triggers a **full ~101 mV spike** — there is no
+"moderately suprathreshold" middle. Consequently:
 
-  > **Honest note / deviation from the LIF-based spec.** The reference finding
-  > was that the network *still bursts with static synapses* (A-current as the
-  > sole terminator). That was validated for a different, hand-provided `kA.mod`
-  > and a weaker-coupling operating point. The A-current mechanism here was
-  > written from the spec (the reference `.mod` files were not supplied) and
-  > tuned for robust bursting *with* depression; at that operating point the
-  > A-current alone does not terminate bursts. A static-synapse bursting regime
-  > is reachable at lower `exc_weight_scale`, but is not the default.
+- A single **noise** event (`0.0008 µS`) is subthreshold (~5.6 mV) — noise
+  integrates, it does not detonate.
+- A single **recurrent** excitatory event, at any weight strong enough to sustain
+  network bursts, is **suprathreshold** (fires the postsynaptic cell). We verified
+  by sweep (density 0.04–0.12, `exc_tau` 3–6 ms, `noise_rate` 2–30 Hz, `tau_d`
+  250–800 ms) that a **genuinely subthreshold recurrent weight set does NOT
+  sustain bursts** — the network is silent at low noise and asynchronously tonic
+  at high noise. So **subthreshold recurrent coupling and the burst gate are
+  mutually exclusive** in this cell.
+
+The recurrent weights were nonetheless **reduced** from the earlier calibration
+(`exc_weight_scale` 4.0 → 1.5) to the minimum that still bursts. Making them fully
+subthreshold would require a better-integrating cell (e.g. a multi-compartment
+neuron), which is out of scope here.
+
+### The seizure mechanism (K⁺ accumulation)
+
+Seizure is modelled by **impaired glial/diffusive K⁺ clearance**, not a reduced
+A-current:
+
+- **Normal** — `tau_k = 200 ms` (strong buffering). [K⁺]ₒ stays ~4 mM; the
+  network produces discrete bursts. `states.normal_state()`.
+- **Seizure** — large `tau_k` (e.g. `2500 ms`, impaired buffering). Firing-driven
+  [K⁺]ₒ accumulates, E_K depolarizes, and positive feedback drives an ictal
+  state. **Verified:** [K⁺]ₒ rises to **~12–14 mM**, firing ~**8 Hz**, discrete
+  bursts merge into sustained activity. `states.seizure_state(severity)`;
+  `states.seizure_dose_response()` sweeps `tau_k`.
+- **Deprecated `gbar_kA` route** — `states.gbar_block_state` (alias
+  `four_ap_state`) still reduces the A-current, but on the realistic log-normal
+  topology this does **not** faithfully reproduce seizure (the dramatic
+  reduced-A-current effect was specific to the dense discrete-hub topology). Kept
+  as a phenomenological option only.
+
+### Two bug fixes
+
+1. **Mis-calibrated weights → hyperexcitability.** Previously a single background
+   event (`noise_weight = 0.0016 µS`) caused a ~103 mV deflection — one
+   presynaptic spike was suprathreshold, so the network chain-reacted to
+   near-continuous firing and swamped the A-current. The **noise** weight is now
+   `0.0008 µS` (single noise EPSP ~5.6 mV, subthreshold), and the **recurrent**
+   gain was reduced (`exc_weight_scale` 4.0 → 1.5). See *Recurrent coupling and
+   the sharp HH threshold* above for why the recurrent EPSP remains suprathreshold
+   in any bursting regime (an intrinsic property of this HH point-neuron).
+2. **Per-recording noise seed had no effect → identical recordings.** The old
+   `NetStim.seed()` path produced byte-identical recordings. Each generator now
+   draws from a `Random123(base_seed, gid, recording_index)` stream via
+   `noiseFromRandom`, re-keyed per recording (`noise.reseed_noise`), so every
+   recording is a distinct trial. **Verified:** a 3-recording session gives
+   pairwise-different spike trains.
+
+### Roles of noise and depression
+
+- **Noise is an ignition seed, not a driver.** Below a threshold noise level the
+  network is silent; above it, recurrent excitation ignites synchronized bursts.
+- **Short-term depression is the burst terminator / brake against runaway** in
+  the tuned regime; turning depression off at the default recurrent strength
+  drives continuous firing rather than discrete bursts.
 
 ---
 
@@ -208,12 +259,32 @@ inference mode. The **ground truth is the exact wired graph** (the `connections`
 table). The first ~1 s startup transient is discarded at save time, so inference
 sees steady-state data.
 
-**Verified end-to-end** on a generated session (148 neurons, log-normal
-topology, 2×12 s recordings): the learned-LIF model reached **AUC ≈ 0.85** and
-the CCG baseline **AUC ≈ 0.84** against the ground-truth wiring, straight out of
-the vendored pipeline. (FDR at the chosen threshold is high, ~0.4–0.5, because
-the fast bursting leaves sparse inter-burst spikes — AUC, which is
-threshold-free, is the more meaningful score here.)
+**Verified end-to-end** on the deliverable session (148 neurons, log-normal
+topology, **20×60 s** recordings, ~456k spikes), straight out of the vendored
+pipeline against the ground-truth wiring:
+
+| model | AUC | notes |
+|-------|-----|-------|
+| learned-LIF (spike-only) | **0.921** | FDR 0.47 (see the FDR note above) |
+| CCG baseline (all bins) | **0.840** | FDR 0.56 |
+| CCG baseline (our bursts excluded) | **0.866** | 11% of bins excluded |
+
+Excluding the burst-dominated bins (our participation-based windows) does **not**
+lower the CCG AUC — it slightly *raises* it (0.840 → 0.866) — so the CCG score is
+**not** inflated by burst common-input here. (Note: the inference pipeline's own
+default burst detector flags 0 windows on these short ~100 ms bursts, so its
+built-in exclusion is a no-op on this data; the test above uses the project's
+participation-based burst windows.)
+
+**On the FDR (~0.6).** A high FDR alongside a good AUC does **not** mean "AUC is
+insensitive to sparse spikes" — that conflates two things. It means the model
+*ranks* edges well (good AUC) but the **surrogate-derived threshold is
+miscalibrated**: too many false positives are admitted at the chosen cutoff. This
+is the **same, still-open surrogate-FDR calibration problem already documented in
+the LIF project** (where the true FDR was ~0.63 at the chosen threshold), carried
+over here unchanged — not a new NEURON-specific artifact, and not "expected/fine."
+Fixing it is threshold-calibration work in the inference package, independent of
+the simulator.
 
 ### Session layout (must match the LIF pipeline exactly)
 
@@ -236,22 +307,25 @@ recording files; spike times are in **milliseconds**. Inference-critical fields
 
 ## Honest caveats
 
-- **Burst rate is fast.** The verified regime bursts at ~2–5 Hz, far faster than
-  the ~0.03 Hz (tens of seconds between bursts) seen in real dissociated
-  cultures. Slowing it toward culture-realistic spacing would require stronger
-  adaptation/depression recovery and weaker drive; the fast regime is convenient
-  for generating many bursts quickly for inference. A side effect of the fast
-  bursting is that inter-burst spiking is sparse, which makes the monosynaptic
-  connectivity signal (what inference reads between bursts) weaker than in the
-  slower LIF cultures.
+- **Burst rate is fast.** The verified normal regime bursts at ~1.3 Hz, far
+  faster than the ~0.03 Hz (tens of seconds between bursts) seen in real
+  dissociated cultures. The fast regime is convenient for generating many bursts
+  quickly for inference; slowing it toward culture-realistic spacing would need
+  weaker drive and stronger slow adaptation.
+- **Reduced-A-current is not a faithful 4-AP model here.** The dramatic
+  reduced-`gbar_kA` effect was specific to the dense discrete-hub topology; on the
+  realistic log-normal topology it changes burst frequency in a
+  topology-dependent, sometimes wrong-signed way. Use the K⁺-clearance
+  (`tau_k`) seizure model instead; `gbar_block_state` is kept only as a
+  phenomenological knob (mainly useful with the discrete-hub builder).
 - **Squid HH kinetics.** The default 6.3 °C `hh` is the classic squid model, not
   mammalian cortex. The 34 °C variant speeds kinetics but is still a caricature.
-- **Sparse topology gives a weaker/messier 4-AP effect.** The realistic sparse
-  log-normal network produces a less clean, noisier 4-AP dose response than a
-  dense discrete-hub network, where near-full recruitment makes the effect
-  crisp. Use the discrete-hub builder if you want the sharpest 4-AP contrast.
-- **The A-current here is a compact caricature**, not a fit to a specific Kv4
-  channel; parameters were tuned for network bursting, not channel realism.
+- **`kdyn` is a lumped caricature.** [K⁺]ₒ is a single well-mixed pool per soma
+  with a lumped efflux coupling and fixed `ki` — enough to reproduce the
+  accumulation → depolarization → runaway loop, not a spatially-resolved ion
+  model.
+- **The A-current is a compact caricature**, not a fit to a specific Kv4 channel;
+  parameters were tuned for network bursting, not channel realism.
 
 ---
 

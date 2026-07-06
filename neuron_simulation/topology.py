@@ -53,6 +53,14 @@ class NeuronWeightParameters:
 
     def __init__(self):
         # Peak conductances in microsiemens (uS). 1e-3 uS = 1 nS.
+        # NOTE: these ranges are ABOVE the single-event rheobase of the HH cell
+        # (~0.00085 uS ~ 6 mV), so a single recurrent spike is suprathreshold.
+        # This is unavoidable for network bursting in this sharp-threshold HH
+        # point-neuron: a genuinely subthreshold recurrent weight set (all
+        # weights < ~0.00085 uS) does NOT sustain bursts (verified -- the network
+        # goes silent at low noise and asynchronously tonic at high noise). The
+        # 2x-trimmed variant that was tried is therefore not used. See the README
+        # "Recurrent coupling and the sharp HH threshold" note.
         self.within_exc_range = (0.0010, 0.0022)
         self.between_exc_range = (0.0008, 0.0016)
         self.within_inh_range = (0.0025, 0.0055)

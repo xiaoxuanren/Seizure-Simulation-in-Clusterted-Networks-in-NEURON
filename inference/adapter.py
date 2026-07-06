@@ -155,6 +155,13 @@ def run_inference(
     Returns:
         A dict summarizing ``learned`` and ``ccg`` results, each with ``auc`` and
         ``fdr`` (plus ``ap``/``f1`` where available).
+
+    Note on FDR: a high ``fdr`` (~0.6) alongside a good ``auc`` means the model
+    *ranks* edges well but the surrogate-derived threshold is miscalibrated (too
+    many false positives are admitted). This is the known, still-open
+    surrogate-FDR calibration problem carried over from the LIF project (true FDR
+    ~0.63 there at the chosen threshold), not a NEURON-specific artifact and not
+    something to wave off -- see the README's inference section.
     """
     _ensure_paths()
     from sklearn.metrics import roc_auc_score
