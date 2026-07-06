@@ -260,11 +260,21 @@ table). The first ~1 s startup transient is discarded at save time, so inference
 sees steady-state data.
 
 **Verified end-to-end** on the deliverable session (148 neurons, log-normal
-topology, 20×60 s recordings): the learned-LIF and CCG models run against NEURON
-output straight out of the vendored pipeline, scoring AUC well above the 0.5
-chance level. See PR #1 for the exact learned-LIF and CCG AUCs, including the CCG
-baseline **with and without burst exclusion** (burst-dominated recordings are
-where CCG can inflate from common-input confounds).
+topology, **20×60 s** recordings, ~456k spikes), straight out of the vendored
+pipeline against the ground-truth wiring:
+
+| model | AUC | notes |
+|-------|-----|-------|
+| learned-LIF (spike-only) | **0.921** | FDR 0.47 (see the FDR note above) |
+| CCG baseline (all bins) | **0.840** | FDR 0.56 |
+| CCG baseline (our bursts excluded) | **0.866** | 11% of bins excluded |
+
+Excluding the burst-dominated bins (our participation-based windows) does **not**
+lower the CCG AUC — it slightly *raises* it (0.840 → 0.866) — so the CCG score is
+**not** inflated by burst common-input here. (Note: the inference pipeline's own
+default burst detector flags 0 windows on these short ~100 ms bursts, so its
+built-in exclusion is a no-op on this data; the test above uses the project's
+participation-based burst windows.)
 
 **On the FDR (~0.6).** A high FDR alongside a good AUC does **not** mean "AUC is
 insensitive to sparse spikes" — that conflates two things. It means the model
