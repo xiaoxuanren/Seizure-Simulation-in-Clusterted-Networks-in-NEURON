@@ -345,16 +345,16 @@ def _finalize_topology(
 # --------------------------------------------------------------------------- #
 def build_topology_lognormal(
     num_clusters=20,
-    neurons_per_cluster_range=(10, 16),
+    neurons_per_cluster_range=(4, 40),
     inhibitory_probability=0.2,
     cluster_radius=1.0,
     space_size=15.0,
-    within_cluster_prob=0.55,
+    within_cluster_prob=0.2,
     between_cluster_prob=0.15,
     max_connection_distance=8.0,
     decay_sigma=3.0,
     ln_sigma=1.0,
-    target_density=0.035,
+    target_density=None,
     weight_params=None,
     seed=0,
 ):
@@ -457,11 +457,11 @@ def build_topology_lognormal(
 # --------------------------------------------------------------------------- #
 def build_topology(
     num_clusters=20,
-    neurons_per_cluster_range=(10, 16),
+    neurons_per_cluster_range=(4, 40),
     inhibitory_probability=0.2,
     cluster_radius=1.0,
     space_size=15.0,
-    within_cluster_prob=0.55,
+    within_cluster_prob=0.2,
     between_cluster_prob=0.15,
     max_connection_distance=8.0,
     decay_sigma=3.0,
