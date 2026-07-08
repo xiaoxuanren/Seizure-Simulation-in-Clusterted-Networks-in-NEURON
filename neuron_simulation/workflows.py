@@ -64,7 +64,7 @@ def run_single_state(
     state_name = "custom"
     if state is not None:
         state_name = state.get("state_name", "custom")
-        for key in ("gbar_kA_exc", "gbar_kA_inh", "tau_k"):
+        for key in ("gbar_kA_exc", "gbar_kA_inh", "tau_k", "sahp_ainc_slow", "sahp_ainc_fast"):
             if key in state:
                 build_kwargs[key] = state[key]
 
@@ -305,6 +305,7 @@ def generate_dataset(
             )
             # per-recording raster (spike + population panel + burst shading)
             raster_file = None
+            raster_shuffled_file = None
             try:
                 from . import plotting as _plotting
                 import matplotlib.pyplot as _plt
@@ -321,7 +322,24 @@ def generate_dataset(
                 raster_file = os.path.join(session_dir, f"recording{rec_idx:03d}_raster.png")
                 _rfig.savefig(raster_file, dpi=120, facecolor="white", bbox_inches="tight")
                 _plt.close(_rfig)
-                print(f"  raster -> {raster_file}")
+
+                # companion raster with randomized neuron rows: if the burst
+                # synchrony is genuinely network-wide it survives the shuffle;
+                # if it were an artifact of grouping clusters by index it smears.
+                _sfig = _plotting.plot_raster(
+                    spike_data,
+                    network.n_neurons,
+                    recording_duration,
+                    is_inhibitory=topology.get("neuron_is_inhibitory"),
+                    cluster_assignments=topology["cluster_assignments"],
+                    burn_in_ms=0.0,
+                    title=f"recording {rec_idx:03d} - {state.get('state_name')} (randomized rows)",
+                    randomize_rows=True,
+                )
+                raster_shuffled_file = os.path.join(session_dir, f"recording{rec_idx:03d}_raster_shuffled.png")
+                _sfig.savefig(raster_shuffled_file, dpi=120, facecolor="white", bbox_inches="tight")
+                _plt.close(_sfig)
+                print(f"  raster -> {raster_file} (+ shuffled)")
             except Exception as exc:  # pragma: no cover - never break generation
                 print(f"  [warn] raster skipped: {exc}")
 
@@ -330,6 +348,7 @@ def generate_dataset(
                     "index": rec_idx,
                     "file": recording_file,
                     "raster": raster_file,
+                    "raster_shuffled": raster_shuffled_file,
                     "success": True,
                     "n_bursts": stats["n_bursts"],
                     "burst_rate_hz": stats["burst_rate_hz"],

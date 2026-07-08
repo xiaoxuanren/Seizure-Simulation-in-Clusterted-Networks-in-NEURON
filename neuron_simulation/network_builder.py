@@ -18,6 +18,7 @@ graph exactly.
 """
 
 from neuron import h
+import numpy as np
 
 from .neurons import build_cell, load_mechanisms
 from .noise import add_poisson_noise
@@ -80,20 +81,30 @@ def build_network(
     gbar_kA_exc=0.006,
     gbar_kA_inh=0.004,
     depression=True,
-    depression_d=0.5,
-    tau_d=800.0,
-    exc_tau=3.0,
+    depression_d=0.3,
+    tau_d=500.0,
+    exc_tau=5.0,
     inh_tau=6.0,
     e_inh=-75.0,
     syn_delay=1.5,
+    delay_per_distance=2.0,
     spike_threshold=0.0,
-    exc_weight_scale=1.5,
-    inh_weight_scale=1.5,
-    noise_rate=2.5,
-    noise_weight=0.0008,
+    exc_weight_scale=2.5,
+    inh_weight_scale=5.0,
+    noise_rate=18.0,
+    noise_weight=0.0025,
     noise_tau=3.0,
     noise_seed=1000,
     tau_k=200.0,
+    synapse_model="ampa_nmda",
+    tau_nmda=150.0,
+    nmda_ratio=2.5,
+    adapt=True,
+    sahp_ainc_fast=0.009,
+    sahp_tau_fast=300.0,
+    sahp_ainc_slow=0.0045,
+    sahp_tau_slow=4000.0,
+    sahp_ek=-90.0,
     kA_globals=None,
 ):
     """Instantiate a NEURON network from a topology dict.
@@ -158,6 +169,12 @@ def build_network(
             gbar_kA=gbar_kA_inh if inhibitory else gbar_kA_exc,
             cluster_id=int(cluster_assignments[gid]),
             spike_threshold=spike_threshold,
+            adapt=adapt,
+            sahp_ainc_fast=sahp_ainc_fast,
+            sahp_tau_fast=sahp_tau_fast,
+            sahp_ainc_slow=sahp_ainc_slow,
+            sahp_tau_slow=sahp_tau_slow,
+            sahp_ek=sahp_ek,
         )
         # Extracellular-K+ clearance rate (the seizure knob). Guarded so this is
         # a no-op if the kdyn mechanism is not inserted (e.g. before the upgrade).
@@ -169,17 +186,28 @@ def build_network(
 
     # --- recurrent synapses (one point process + NetCon per edge) ---
     effective_d = float(depression_d) if depression else 0.0
+    positions = (np.asarray(topology.get("neuron_positions"), dtype=float)
+                 if delay_per_distance > 0 else None)
     synapses = []
     netcons = []
     for row in connections:
         pre_id, post_id, weight, conn_type = int(row[0]), int(row[1]), float(row[2]), str(row[3])
         post = cells[post_id]
         if conn_type == "exc":
-            syn = h.DepSyn(post.soma(0.5))
-            syn.tau = exc_tau
-            syn.e = 0.0
-            syn.d = effective_d
-            syn.tau_d = tau_d
+            if synapse_model == "ampa_nmda":
+                syn = h.AmpaNmda(post.soma(0.5))
+                syn.tau_ampa = exc_tau
+                syn.tau_nmda = tau_nmda
+                syn.nmda_ratio = nmda_ratio
+                syn.e = 0.0
+                syn.d = effective_d
+                syn.tau_d = tau_d
+            else:
+                syn = h.DepSyn(post.soma(0.5))
+                syn.tau = exc_tau
+                syn.e = 0.0
+                syn.d = effective_d
+                syn.tau_d = tau_d
         else:
             syn = h.ExpSyn(post.soma(0.5))
             syn.tau = inh_tau
@@ -188,7 +216,11 @@ def build_network(
         scale = exc_weight_scale if conn_type == "exc" else inh_weight_scale
         nc = h.NetCon(cells[pre_id].soma(0.5)._ref_v, syn, sec=cells[pre_id].soma)
         nc.threshold = spike_threshold
-        nc.delay = syn_delay
+        if positions is not None:
+            d = float(np.hypot(*(positions[pre_id] - positions[post_id])))
+            nc.delay = syn_delay + d * delay_per_distance
+        else:
+            nc.delay = syn_delay
         nc.weight[0] = abs(weight) * scale  # NetCon weight is a positive conductance
 
         post.recurrent_synapses.append(syn)
@@ -212,6 +244,7 @@ def build_network(
         "inh_tau": float(inh_tau),
         "e_inh": float(e_inh),
         "syn_delay": float(syn_delay),
+        "delay_per_distance": float(delay_per_distance),
         "spike_threshold": float(spike_threshold),
         "exc_weight_scale": float(exc_weight_scale),
         "inh_weight_scale": float(inh_weight_scale),
@@ -220,6 +253,15 @@ def build_network(
         "noise_tau": float(noise_tau),
         "noise_seed": int(noise_seed),
         "tau_k": float(tau_k),
+        "synapse_model": str(synapse_model),
+        "tau_nmda": float(tau_nmda),
+        "nmda_ratio": float(nmda_ratio),
+        "adapt": bool(adapt),
+        "sahp_ainc_fast": float(sahp_ainc_fast),
+        "sahp_tau_fast": float(sahp_tau_fast),
+        "sahp_ainc_slow": float(sahp_ainc_slow),
+        "sahp_tau_slow": float(sahp_tau_slow),
+        "sahp_ek": float(sahp_ek),
         "kA_globals": dict(kA_globals) if kA_globals else {},
     }
     print(

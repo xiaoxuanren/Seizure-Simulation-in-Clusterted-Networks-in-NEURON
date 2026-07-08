@@ -29,7 +29,18 @@ NORMAL_GBAR_KA_EXC = 0.006
 NORMAL_GBAR_KA_INH = 0.004
 #: Extracellular-K+ clearance time constant (ms) for the normal vs seizure state.
 NORMAL_TAU_K = 200.0
-SEIZURE_TAU_K = 2500.0
+SEIZURE_TAU_K = 12000.0
+#: Slow-sAHP per-spike increment (uS): full in the normal state, strongly reduced
+#: in seizure. Reduced slow adaptation (Kv7/sAHP dysfunction) is itself an
+#: epilepsy mechanism, and the slow AHP is otherwise anticonvulsant enough that
+#: impairing K+ clearance alone does not reach the ictal ceiling.
+NORMAL_SAHP_SLOW = 0.0045
+SEIZURE_SAHP_SLOW = 0.001
+#: Fast-SFA per-spike increment (uS): full in the normal state, reduced in
+#: seizure. Kv7/M-current loss reduces fast adaptation too; without this the
+#: strong fast SFA is anticonvulsant enough to cap [K+]o below the ictal range.
+NORMAL_SAHP_FAST = 0.009
+SEIZURE_SAHP_FAST = 0.006
 
 
 def normal_state():
@@ -74,12 +85,17 @@ def seizure_state(severity=1.0):
     """
     if severity < 0.0:
         raise ValueError("severity must be >= 0.")
+    frac = min(float(severity), 1.0)
     tau_k = NORMAL_TAU_K + float(severity) * (SEIZURE_TAU_K - NORMAL_TAU_K)
+    sahp_ainc_slow = NORMAL_SAHP_SLOW + frac * (SEIZURE_SAHP_SLOW - NORMAL_SAHP_SLOW)
+    sahp_ainc_fast = NORMAL_SAHP_FAST + frac * (SEIZURE_SAHP_FAST - NORMAL_SAHP_FAST)
     return {
         "state_name": f"seizure_sev{severity:g}",
         "gbar_kA_exc": NORMAL_GBAR_KA_EXC,
         "gbar_kA_inh": NORMAL_GBAR_KA_INH,
         "tau_k": tau_k,
+        "sahp_ainc_slow": sahp_ainc_slow,
+        "sahp_ainc_fast": sahp_ainc_fast,
     }
 
 
@@ -141,13 +157,17 @@ def seizure_dose_response(n_points=6, min_tau_k=NORMAL_TAU_K, max_tau_k=SEIZURE_
         A list of state dicts ordered from healthy toward seizure-prone.
     """
     sweep = []
+    span = max(max_tau_k - min_tau_k, 1e-9)
     for tau_k in np.linspace(min_tau_k, max_tau_k, n_points):
+        frac = (float(tau_k) - min_tau_k) / span  # 0 (healthy) -> 1 (most impaired)
         sweep.append(
             {
                 "state_name": f"tau_k_{tau_k:.0f}",
                 "gbar_kA_exc": NORMAL_GBAR_KA_EXC,
                 "gbar_kA_inh": NORMAL_GBAR_KA_INH,
                 "tau_k": float(tau_k),
+                "sahp_ainc_slow": NORMAL_SAHP_SLOW + frac * (SEIZURE_SAHP_SLOW - NORMAL_SAHP_SLOW),
+                "sahp_ainc_fast": NORMAL_SAHP_FAST + frac * (SEIZURE_SAHP_FAST - NORMAL_SAHP_FAST),
             }
         )
     return sweep

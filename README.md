@@ -61,16 +61,46 @@ NEURON, NumPy, SciPy, Matplotlib, scikit-learn, h5py, and (for the learned-LIF
 inference) PyTorch:
 
 ```bash
-pip install neuron numpy scipy matplotlib scikit-learn h5py torch jupyter
+pip install neuron numpy scipy matplotlib scikit-learn h5py torch jupyterlab ipykernel
 ```
 
-> On Windows, NEURON is typically installed from the official installer; use the
-> Python interpreter that matches the bundled `hoc` extension (this project was
-> validated with NEURON 8.0 + Python 3.9).
+**The interpreter must match NEURON's bundled `hoc` bindings.** NEURON only ships
+`hoc` for specific Python versions, so `import neuron` fails on a mismatched
+interpreter (e.g. a newer system Python) with
+`ModuleNotFoundError: No module named 'hoc'` / `neuron.hocNNN`.
+
+#### Validated Windows setup (this machine)
+
+- NEURON **8.0** installed at `C:\nrn`.
+- Runs on **Python 3.9** (`...\Programs\Python\Python39\python.exe`) — with
+  numpy 2.0.2, scipy, matplotlib, scikit-learn, h5py, torch 2.5.1+cu121.
+- The system **Python 3.12 cannot run NEURON** here (`No module named
+  'neuron.hoc312'`), so use the 3.9 interpreter for everything.
+- **Running** the notebook needs **no PATH change** — NEURON 8.0 registers its
+  own DLL directory on `import neuron` (verified: the kernel builds a network
+  from a plain inherited PATH). `C:\nrn\bin` on `PATH` is only needed for
+  **compiling** mechanisms with the bare `nrnivmodl` command (step 2) — or call
+  it by full path, `& 'C:\nrn\bin\nrnivmodl.bat' mechanisms`.
+
+#### Register a Jupyter kernel for the NEURON interpreter (once)
+
+The `.ipynb` needs a kernel backed by the NEURON-capable Python. On this machine:
+
+```powershell
+$py = 'C:\Users\<you>\AppData\Local\Programs\Python\Python39\python.exe'
+& $py -m pip install jupyterlab ipykernel
+& $py -m ipykernel install --user --name neuron-py39 --display-name "Python 3.9 (NEURON)"
+& $py -m jupyter lab
+```
+
+Then open the notebook and pick the **"Python 3.9 (NEURON)"** kernel — it runs
+NEURON out of the box (no PATH setup). You can also execute the notebook's cells
+headlessly with the same interpreter directly.
 
 ### 2. Compile the mechanisms (once)
 
-The custom `kA` and `DepSyn` mechanisms **must be compiled before running**:
+The custom mechanisms (`kA`, `kdyn`, `DepSyn`, `AmpaNmda`, `sAHP`) **must be
+compiled before running** (and recompiled whenever a `.mod` is added or changed):
 
 ```bash
 cd neuron_simulation

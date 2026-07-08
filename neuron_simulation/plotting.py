@@ -43,6 +43,8 @@ def plot_raster(
     burn_in_ms=1000.0,
     detect_bursts=True,
     title="Network raster",
+    randomize_rows=False,
+    row_seed=0,
 ):
     """Plot a cluster-sorted spike raster with a population-activity panel.
 
@@ -66,6 +68,11 @@ def plot_raster(
     order = np.arange(n_neurons)
     if cluster_assignments is not None:
         order = np.argsort(cluster_assignments, kind="stable")
+    if randomize_rows:
+        # Shuffle which row each neuron occupies. If burst synchrony is genuine
+        # (network-wide), the vertical-stripe pattern survives; if it were an
+        # artifact of grouping clusters by index, it would smear out.
+        order = np.random.default_rng(row_seed).permutation(n_neurons)
     row_of = {nid: row for row, nid in enumerate(order)}
 
     fig, (ax_r, ax_p) = plt.subplots(
@@ -77,8 +84,8 @@ def plot_raster(
             continue
         y = np.full(s.shape, row_of[nid])
         color = _INH_COLOR if is_inhibitory[nid] else _EXC_COLOR
-        ax_r.scatter(s, y, s=1.5, c=color, marker="|", linewidths=0.5)
-    ax_r.set_ylabel("neuron (cluster-sorted)")
+        ax_r.scatter(s, y, s=4.0, c=color, marker=".", linewidths=0.0)
+    ax_r.set_ylabel("neuron (randomized)" if randomize_rows else "neuron (cluster-sorted)")
     ax_r.set_title(title)
     ax_r.set_ylim(-1, n_neurons)
 
@@ -241,7 +248,7 @@ def plot_state_comparison(normal, four_ap, n_neurons, duration_ms, burn_in_ms=10
         for nid, spikes in spike_data.items():
             s = np.asarray(spikes, dtype=float)
             if s.size:
-                ax.scatter(s, np.full(s.shape, nid), s=1.2, c="#1f5fd0", marker="|", linewidths=0.4)
+                ax.scatter(s, np.full(s.shape, nid), s=4.0, c="#1f5fd0", marker=".", linewidths=0.0)
         for b in bursts:
             ax.axvspan(b["start_ms"], b["end_ms"], color="orange", alpha=0.15)
         ax.axvline(burn_in_ms, color="green", ls="--", lw=1, alpha=0.7)
@@ -296,6 +303,8 @@ def plot_raster_with_ko(
     cluster_assignments=None,
     burn_in_ms=0.0,
     title="Raster + [K+]o",
+    randomize_rows=False,
+    row_seed=0,
 ):
     """Plot a cluster-sorted raster with mean extracellular [K+]o(t) underneath.
 
@@ -323,6 +332,11 @@ def plot_raster_with_ko(
     order = np.arange(n_neurons)
     if cluster_assignments is not None:
         order = np.argsort(cluster_assignments, kind="stable")
+    if randomize_rows:
+        # Shuffle which row each neuron occupies. If burst synchrony is genuine
+        # (network-wide), the vertical-stripe pattern survives; if it were an
+        # artifact of grouping clusters by index, it would smear out.
+        order = np.random.default_rng(row_seed).permutation(n_neurons)
     row_of = {nid: row for row, nid in enumerate(order)}
 
     fig, (ax_r, ax_k) = plt.subplots(
@@ -334,8 +348,8 @@ def plot_raster_with_ko(
             continue
         y = np.full(s.shape, row_of[nid])
         color = _INH_COLOR if is_inhibitory[nid] else _EXC_COLOR
-        ax_r.scatter(s, y, s=1.5, c=color, marker="|", linewidths=0.5)
-    ax_r.set_ylabel("neuron (cluster-sorted)")
+        ax_r.scatter(s, y, s=4.0, c=color, marker=".", linewidths=0.0)
+    ax_r.set_ylabel("neuron (randomized)" if randomize_rows else "neuron (cluster-sorted)")
     ax_r.set_title(title)
     ax_r.set_ylim(-1, n_neurons)
 

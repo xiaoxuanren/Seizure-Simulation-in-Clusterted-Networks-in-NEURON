@@ -154,6 +154,12 @@ class Cell:
         gbar_kA=None,
         spike_threshold=0.0,
         cluster_id=-1,
+        adapt=False,
+        sahp_ainc_fast=0.009,
+        sahp_tau_fast=200.0,
+        sahp_ainc_slow=0.001,
+        sahp_tau_slow=2000.0,
+        sahp_ek=-90.0,
     ):
         self.gid = int(gid)
         self.is_inhibitory = bool(is_inhibitory)
@@ -195,6 +201,26 @@ class Cell:
         self._spike_detector.threshold = float(spike_threshold)
         self._spike_detector.record(self.spike_times)
 
+        # --- slow spike-triggered adaptation (sAHP) ---
+        # Optional intrinsic slow K+ conductance driven by the cell's OWN spikes
+        # (a self-NetCon from the soma voltage). Each spike bumps the conductance;
+        # its seconds-scale decay (sahp_tau) provides spike-frequency adaptation
+        # and sets the multi-second inter-burst interval. Off by default; enabled
+        # via ``build_network(adapt=True)``.
+        self.sahp = None
+        self._adapt_nc = None
+        if adapt:
+            self.sahp = h.sAHP(self.soma(0.5))
+            self.sahp.ainc_fast = float(sahp_ainc_fast)
+            self.sahp.tau_fast = float(sahp_tau_fast)
+            self.sahp.ainc_slow = float(sahp_ainc_slow)
+            self.sahp.tau_slow = float(sahp_tau_slow)
+            self.sahp.ek = float(sahp_ek)
+            self._adapt_nc = h.NetCon(self.soma(0.5)._ref_v, self.sahp, sec=self.soma)
+            self._adapt_nc.threshold = float(spike_threshold)
+            self._adapt_nc.delay = 0.0
+            self._adapt_nc.weight[0] = 1.0
+
     def set_gbar_kA(self, gbar_kA):
         """Set the A-current density (the 4-AP knob) for this cell.
 
@@ -219,7 +245,9 @@ class Cell:
         return list(self.spike_times)
 
 
-def build_cell(gid, is_inhibitory=False, gbar_kA=None, cluster_id=-1, spike_threshold=0.0):
+def build_cell(gid, is_inhibitory=False, gbar_kA=None, cluster_id=-1, spike_threshold=0.0,
+               adapt=False, sahp_ainc_fast=0.003, sahp_tau_fast=200.0,
+               sahp_ainc_slow=0.001, sahp_tau_slow=2000.0, sahp_ek=-90.0):
     """Construct one HH + A-current cell (thin wrapper over :class:`Cell`).
 
     Args:
@@ -228,6 +256,12 @@ def build_cell(gid, is_inhibitory=False, gbar_kA=None, cluster_id=-1, spike_thre
         gbar_kA: Optional A-current density override in S/cm2.
         cluster_id: Optional cluster index carried into the cell for metadata.
         spike_threshold: Spike-detection voltage threshold in mV.
+        adapt: Whether to add the intrinsic two-timescale adaptation current (sAHP).
+        sahp_ainc_fast: Per-spike increment of the fast SFA component (uS).
+        sahp_tau_fast: Fast SFA decay time constant (ms).
+        sahp_ainc_slow: Per-spike increment of the slow AHP component (uS).
+        sahp_tau_slow: Slow AHP decay time constant (ms).
+        sahp_ek: sAHP K+ reversal potential (mV).
 
     Returns:
         An initialized :class:`Cell`.
@@ -238,4 +272,10 @@ def build_cell(gid, is_inhibitory=False, gbar_kA=None, cluster_id=-1, spike_thre
         gbar_kA=gbar_kA,
         cluster_id=cluster_id,
         spike_threshold=spike_threshold,
+        adapt=adapt,
+        sahp_ainc_fast=sahp_ainc_fast,
+        sahp_tau_fast=sahp_tau_fast,
+        sahp_ainc_slow=sahp_ainc_slow,
+        sahp_tau_slow=sahp_tau_slow,
+        sahp_ek=sahp_ek,
     )
