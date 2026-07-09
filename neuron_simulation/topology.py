@@ -356,6 +356,13 @@ def build_topology_lognormal(
     ln_sigma=1.0,
     target_density=None,
     weight_params=None,
+    cell_type_specific=False,
+    p_ee_within=0.15,
+    p_ee_between=0.02,
+    p_ei_within=0.30,
+    p_ei_between=0.01,
+    p_ie_within=0.70,
+    p_ii_within=0.50,
     seed=0,
 ):
     """Build the preferred clustered + log-normal-propensity topology.
@@ -416,7 +423,28 @@ def build_topology_lognormal(
     diff = neuron_positions[:, None, :] - neuron_positions[None, :, :]
     dist = np.sqrt(np.sum(diff ** 2, axis=-1))
     same = cluster_assignments[:, None] == cluster_assignments[None, :]
-    base = np.where(same, within_cluster_prob, between_cluster_prob)
+    if cell_type_specific:
+        # Block probabilities by (source E/I x target E/I x within/between).
+        # Inhibition is a LOCAL blanket: I->anything is within-cluster only
+        # (axons don't reach other clusters), so between-cluster edges are
+        # ~purely excitatory. See Fino & Yuste (2011); Pfeffer et al. (2013).
+        src_inh = is_inhibitory[:, None]
+        tgt_inh = is_inhibitory[None, :]
+        ee = (~src_inh) & (~tgt_inh)
+        ei = (~src_inh) & tgt_inh
+        ie = src_inh & (~tgt_inh)
+        ii = src_inh & tgt_inh
+        base = np.zeros((n_neurons, n_neurons))
+        base[ee] = np.where(same, p_ee_within, p_ee_between)[ee]
+        base[ei] = np.where(same, p_ei_within, p_ei_between)[ei]
+        base[ie] = np.where(same, p_ie_within, 0.0)[ie]
+        base[ii] = np.where(same, p_ii_within, 0.0)[ii]
+        # Cap inhibitory out-degree by cluster size: I-cells don't get the
+        # log-normal heavy tail (no long-range inhibitory hubs).
+        propensity = propensity.copy()
+        propensity[is_inhibitory] = 1.0
+    else:
+        base = np.where(same, within_cluster_prob, between_cluster_prob)
     base = base * np.exp(-(dist ** 2) / (2.0 * decay_sigma ** 2))
     base[dist > max_connection_distance] = 0.0
     np.fill_diagonal(base, 0.0)
