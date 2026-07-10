@@ -128,6 +128,88 @@ def _empirical_fdr(metrics):
 # --------------------------------------------------------------------------- #
 # Inference
 # --------------------------------------------------------------------------- #
+def _load_ground_truth_edges(session_dir):
+    """Load ground-truth directed edges and their sign from a saved session.
+
+    Reads the ``network_*.npz`` written by
+    :func:`neuron_simulation.io.save_network_structure`.
+
+    Args:
+        session_dir: Path to a saved NEURON session directory.
+
+    Returns:
+        A tuple ``(real_edges, inh_edges, n_neurons)`` where the first two are
+        sets of ``(pre, post)`` integer tuples (``inh_edges`` is the inhibitory
+        subset; Dale's law makes ``type == 'inh'`` equivalent to an inhibitory
+        presynaptic neuron).
+    """
+    net_files = glob.glob(os.path.join(session_dir, "network_*.npz"))
+    if not net_files:
+        raise FileNotFoundError(f"no network_*.npz in {session_dir}")
+    net = np.load(net_files[0], allow_pickle=True)
+    connections = net["connections"]
+    n_neurons = len(net["neuron_positions"])
+    real, inh = set(), set()
+    for r in connections:
+        pre, post, typ = int(r[0]), int(r[1]), str(r[3])
+        real.add((pre, post))
+        if typ == "inh":
+            inh.add((pre, post))
+    return real, inh, n_neurons
+
+
+def _directional_aucs(conn_matrix, neighbor_indices, real_edges, inh_edges, n_neurons):
+    """ROC-AUC for detecting inhibitory vs excitatory edges from signed scores.
+
+    The learned model produces a SIGNED connectivity estimate
+    ``conn_matrix[post, pre]`` (negative = inhibitory). Over the candidate pairs
+    the model actually scored (``neighbor_indices[post]``):
+
+    * inhibitory AUC -- positive class = real inhibitory edges (I->E, I->I),
+      score = ``-conn_matrix[post, pre]`` (more negative weight -> more inhibitory);
+    * excitatory AUC -- positive class = real excitatory edges, score =
+      ``+conn_matrix[post, pre]``.
+
+    Args:
+        conn_matrix: ``[N, N]`` signed learned weights indexed ``[post, pre]``.
+        neighbor_indices: Per-postsynaptic candidate presynaptic ids.
+        real_edges: Set of ``(pre, post)`` ground-truth directed edges.
+        inh_edges: Inhibitory subset of ``real_edges``.
+        n_neurons: Number of neurons.
+
+    Returns:
+        A dict with ``auc_inhibitory``/``auc_excitatory`` (when both classes are
+        present in the candidate set), the positive counts, and the number of
+        scored candidates.
+    """
+    from sklearn.metrics import roc_auc_score
+
+    conn = np.asarray(conn_matrix)
+    s_inh, y_inh, s_exc, y_exc = [], [], [], []
+    for post in range(n_neurons):
+        pres = np.asarray(neighbor_indices[post]).ravel()
+        for pre in pres:
+            pre = int(pre)
+            if pre == post:
+                continue
+            w = float(conn[post, pre])
+            edge = (pre, post)
+            is_inh = edge in inh_edges
+            is_exc = (edge in real_edges) and not is_inh
+            s_inh.append(-w)
+            y_inh.append(1 if is_inh else 0)
+            s_exc.append(w)
+            y_exc.append(1 if is_exc else 0)
+    out = {"n_candidates": len(y_inh)}
+    if len(set(y_inh)) > 1:
+        out["auc_inhibitory"] = float(roc_auc_score(y_inh, s_inh))
+        out["n_inhibitory_positives"] = int(sum(y_inh))
+    if len(set(y_exc)) > 1:
+        out["auc_excitatory"] = float(roc_auc_score(y_exc, s_exc))
+        out["n_excitatory_positives"] = int(sum(y_exc))
+    return out
+
+
 def run_inference(
     session_dir,
     run_learned=True,
@@ -193,6 +275,23 @@ def run_inference(
             "estimated_fdr": results.get("estimated_fdr"),
         }
         print(f"learned-LIF: AUC={summary['learned']['auc']}, FDR={summary['learned']['fdr']:.3f}")
+        # Directional AUC: can the SIGNED learned weights pick out INHIBITORY
+        # edges (positive class = I->E, I->I)? Additive + guarded so a scoring
+        # failure can never break the inference run. Baseline to beat ~0.475.
+        try:
+            real_e, inh_e, n_n = _load_ground_truth_edges(session_dir)
+            dirn = _directional_aucs(_conn_matrix, results.get("neighbor_indices"),
+                                     real_e, inh_e, n_n)
+            summary["learned"].update(dirn)
+            if "auc_inhibitory" in dirn:
+                print(
+                    f"learned-LIF: inhibitory-edge AUC={dirn['auc_inhibitory']:.3f} "
+                    f"(excitatory-edge AUC={dirn.get('auc_excitatory', float('nan')):.3f}; "
+                    f"{dirn.get('n_inhibitory_positives', 0)} inh positives of "
+                    f"{dirn['n_candidates']} candidates; baseline ~0.475)"
+                )
+        except Exception as exc:
+            print(f"  [warn] directional (inhibitory) AUC skipped: {exc}")
 
     if run_ccg:
         if results is None:
