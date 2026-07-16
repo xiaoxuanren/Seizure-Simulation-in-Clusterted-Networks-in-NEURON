@@ -4,7 +4,7 @@ Mirrors the LIF project's ``workflows.py`` (``sequential_simulation_individual_s
 build one network, save its ground-truth structure once, then run several
 independent recordings and save each to disk in the inference-ready session
 layout. Also provides :func:`run_single_state` for quick in-memory
-normal-vs-4-AP comparisons without touching disk.
+normal-vs-seizure comparisons without touching disk.
 
 Independent recordings share the *same* wired network (so the ground truth is
 constant) but use different Poisson-noise seeds, exactly like drawing repeated

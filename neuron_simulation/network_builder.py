@@ -113,9 +113,14 @@ def build_network(
         topology: Topology dict from :mod:`neuron_simulation.topology`.
         celsius: Global simulation temperature (degC). 6.3 keeps NEURON's squid
             ``hh`` kinetics; ~34 gives a faster mammalian-like variant.
-        gbar_kA_exc: A-current density (S/cm2) for excitatory cells (the 4-AP
-            knob for the excitatory population).
-        gbar_kA_inh: A-current density (S/cm2) for inhibitory cells.
+        gbar_kA_exc: A-current density (S/cm2) for excitatory cells. The ``kA``
+            mechanism is inert at its shipped parameters, so changing this does
+            not move the burst phenotype at any value. It is *not* bitwise
+            neutral, though -- zeroing it yields a different (statistically
+            equivalent) spike train, so the default is retained for dataset
+            reproducibility. See the inertness note in ``mechanisms/kA.mod``.
+        gbar_kA_inh: A-current density (S/cm2) for inhibitory cells. Inert; see
+            ``gbar_kA_exc``.
         depression: Whether excitatory synapses use short-term depression. When
             ``False`` the depression fraction is forced to 0 (static synapses).
         depression_d: Per-spike depression fraction for excitatory ``DepSyn``.

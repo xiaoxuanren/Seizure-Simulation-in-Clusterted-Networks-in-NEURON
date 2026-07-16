@@ -23,9 +23,10 @@ Roles of the parameters
            more accumulated depression during high-frequency drive.
 
 Why keep it
-    The A-current (kA.mod) sets the ignition threshold and burst frequency (it
-    is the 4-AP knob), while short-term depression is the burst terminator /
-    brake against runaway. In the tuned default regime here, depression is
+    Short-term depression is the burst terminator / brake against runaway. (The
+    A-current, kA.mod, plays no part: it is inert at its shipped parameters --
+    see the inertness note in kA.mod.) In the tuned default regime here,
+    depression is
     load-bearing: with it OFF (d = 0) at the default recurrent strength the
     network runs away into continuous firing instead of discrete bursts. (The
     LIF-based reference reported that the network still bursts with static

@@ -5,8 +5,13 @@ This module is the NEURON biophysical analogue of the LIF project's
 single-compartment soma with:
 
 * NEURON's built-in ``hh`` mechanism (fast Na+, delayed-rectifier K+, leak), and
-* the custom ``kA`` mechanism (A-type / Kv4-like transient K+ current), whose
-  ``gbar`` is the 4-AP knob (see :mod:`neuron_simulation.states`).
+* the custom ``kA`` mechanism (A-type / Kv4-like transient K+ current), which is
+  **inert at its shipped parameters**: ``gbar_kA`` is a dead parameter and does
+  not model 4-AP. Reducing it does nothing to the burst phenotype, at any dose,
+  on any topology -- see :mod:`neuron_simulation.states` and
+  ``tests/test_kA_characterization.py``. (It is not bitwise neutral, though; the
+  values are retained so existing datasets reproduce. See
+  :data:`DEFAULT_GBAR_KA`.)
 
 Excitatory and inhibitory cells share the same membrane machinery; they differ
 only in their default A-current density and in the sign of the synapses they
@@ -115,11 +120,31 @@ def load_mechanisms(mechanisms_dir=None):
 # --------------------------------------------------------------------------- #
 # Default biophysical parameters
 # --------------------------------------------------------------------------- #
-#: Default A-current density (S/cm2) for the "normal" (drug-free) state. This is
-#: the value reduced to emulate a partial 4-AP block (see states.py).
+#: Default A-current density (S/cm2) for the "normal" (drug-free) state. ``kA`` is
+#: inert at its shipped gating (see :mod:`neuron_simulation.states`), so this value
+#: does not shape the network's behaviour and reducing it is not a 4-AP block.
+#:
+#: It is nonetheless RETAINED, not zeroed, specifically so the existing datasets
+#: reproduce bit-for-bit. Inertness is a statement about the *subthreshold* current;
+#: m^4 is still non-negligible at the spike peak, so zeroing gbar perturbs spike
+#: waveforms, and this recurrent network is chaotic enough to amplify that into a
+#: different spike train. Verified, not assumed: ``scripts/check_ka_contribution.py``
+#: runs the notebook's network twice changing only gbar_kA, and the arms diverge at
+#: t = 2175.5 ms -- by 20 s all 926 spike trains differ (6180 vs 4442 spikes), while
+#: the burst statistics are unchanged (mean IBI 7062 vs 7077 ms). Do not "clean this
+#: up" to 0.0.
+#:
+#: (That check ran on the notebook's current topology, ~926 neurons at 1.56%
+#: density. The sessions under ``NEURON data/`` were generated from a denser
+#: 10-cluster variant -- 3.61% density -- and their ``session_metadata.json``
+#: records ``gbar_kA_exc = 0.006`` / ``gbar_kA_inh = 0.004``, so these exact
+#: defaults are what reproduces them. Chaotic divergence under a gbar change is a
+#: generic property of the recurrent dynamics, not specific to either topology.)
 DEFAULT_GBAR_KA = 0.006
-#: Inhibitory cells carry a slightly weaker A-current so they recruit a touch
-#: earlier than excitatory cells, matching fast-spiking interneuron behaviour.
+#: Inhibitory cells carry a nominally weaker A-current. This was intended to make
+#: them recruit a touch earlier than excitatory cells, matching fast-spiking
+#: interneuron behaviour, but ``kA`` is inert so the E/I difference has no effect
+#: either -- inhibitory cells recruit earlier only via their synaptic drive.
 DEFAULT_GBAR_KA_INH = 0.004
 
 
@@ -138,7 +163,8 @@ class Cell:
             *makes* is enforced by the network builder (Dale's law).
         gbar_kA: A-current density (S/cm2). Defaults to :data:`DEFAULT_GBAR_KA`
             for excitatory cells and :data:`DEFAULT_GBAR_KA_INH` for inhibitory
-            cells. This is the pharmacological 4-AP target.
+            cells. Inert at the shipped ``kA`` parameters (see
+            :mod:`neuron_simulation.states`).
         spike_threshold: Membrane voltage (mV) whose upward crossing the built-in
             ``NetCon`` records as a spike time.
         cluster_id: Optional cluster index carried for bookkeeping/metadata.
@@ -222,7 +248,13 @@ class Cell:
             self._adapt_nc.weight[0] = 1.0
 
     def set_gbar_kA(self, gbar_kA):
-        """Set the A-current density (the 4-AP knob) for this cell.
+        """Set the A-current density for this cell.
+
+        The ``kA`` mechanism is inert at its shipped parameters, so this does not
+        move the burst phenotype at any value. It still perturbs the spike
+        waveform slightly, which a recurrent network amplifies into a different
+        spike train -- so this is not a no-op on saved output. See
+        :mod:`neuron_simulation.states` and :data:`DEFAULT_GBAR_KA`.
 
         Args:
             gbar_kA: New A-current density in S/cm2.
