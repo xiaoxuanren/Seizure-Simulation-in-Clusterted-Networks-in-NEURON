@@ -9,8 +9,10 @@ is the epilepsy model.
 
 * ``normal_state``  -> ``tau_k = 200 ms`` (strong buffering; [K+]o stays ~4 mM;
   discrete network bursts).
-* ``seizure_state`` -> large ``tau_k`` (e.g. 2500 ms; impaired buffering; [K+]o
-  accumulates into the ictal range; elevated, seizure-like firing).
+* ``seizure_state`` -> large ``tau_k`` (12000 ms at ``severity=1.0``; impaired
+  buffering; [K+]o accumulates into the ictal range; elevated, seizure-like
+  firing) plus reduced slow/fast sAHP, which bounds the ictal state so firing
+  stays rhythmic rather than running away.
 
 The old reduced-``gbar_kA`` "4-AP" state is kept as :func:`gbar_block_state`
 (with a back-compatible :func:`four_ap_state` alias) but is **deprecated to a
@@ -69,16 +71,21 @@ def seizure_state(severity=1.0):
 
     Models epilepsy as impaired glial/diffusive K+ buffering: a larger ``tau_k``
     lets firing-driven [K+]o accumulate, depolarizing E_K and driving positive
-    feedback into an ictal state.
+    feedback into an ictal state. Impairing clearance alone does not reach the
+    ictal ceiling, so the slow/fast sAHP increments are reduced alongside it;
+    the residual adaptation is what keeps ictal firing rhythmic.
 
     Args:
         severity: Seizure severity. ``0`` reduces to the normal clearance
             (``tau_k = 200 ms``); ``1.0`` gives the reference impaired value
-            (``tau_k = 2500 ms``); larger values impair clearance further.
+            (``tau_k = 12000 ms``); larger values impair clearance further.
+            ``tau_k`` scales linearly and without bound, but the sAHP reduction
+            saturates at ``severity = 1.0``.
 
     Returns:
-        A dict with the A-current unchanged, an elevated ``tau_k``, and a
-        ``state_name`` reflecting the severity.
+        A dict with the A-current unchanged, an elevated ``tau_k``, reduced
+        ``sahp_ainc_slow``/``sahp_ainc_fast``, and a ``state_name`` reflecting
+        the severity.
 
     Raises:
         ValueError: If ``severity`` is negative.

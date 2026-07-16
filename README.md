@@ -129,7 +129,7 @@ topo = topology.build_topology_lognormal(seed=1)          # preferred builder
 normal  = workflows.run_single_state(topo, state=states.normal_state())
 seizure = workflows.run_single_state(topo, state=states.seizure_state(1.0))
 print(normal["burst_stats"], normal["ko_data"]["mean_ko"].max())    # ~4 mM, discrete bursts
-print(seizure["ko_data"]["mean_ko"].max())                          # ~12 mM, ictal
+print(seizure["ko_data"]["mean_ko"].max())                          # ~8 mM, ictal
 
 # Generate an inference-ready dataset (normal state), then run inference:
 meta, session_dir = workflows.generate_dataset(n_recordings=3, recording_duration=15000)
@@ -214,10 +214,13 @@ A-current:
 
 - **Normal** — `tau_k = 200 ms` (strong buffering). [K⁺]ₒ stays ~4 mM; the
   network produces discrete bursts. `states.normal_state()`.
-- **Seizure** — large `tau_k` (e.g. `2500 ms`, impaired buffering). Firing-driven
-  [K⁺]ₒ accumulates, E_K depolarizes, and positive feedback drives an ictal
-  state. **Verified:** [K⁺]ₒ rises to **~12–14 mM**, firing ~**8 Hz**, discrete
-  bursts merge into sustained activity. `states.seizure_state(severity)`;
+- **Seizure** — large `tau_k` (`12000 ms` at `severity=1.0`, impaired buffering),
+  paired with reduced slow/fast sAHP. Firing-driven [K⁺]ₒ accumulates, E_K
+  depolarizes, and positive feedback drives an ictal state; the residual
+  adaptation bounds it, so ictal firing stays rhythmic rather than running away.
+  **Verified** (commit `5366629`, N=396, ~3.3% density): `severity=1.0` → firing
+  ~**2.6 Hz**, bursts ~**0.8 Hz**, [K⁺]ₒ ~**8 mM**; `severity=2.0` → ~**2.5 Hz**,
+  [K⁺]ₒ ~**9 mM**. `states.seizure_state(severity)`;
   `states.seizure_dose_response()` sweeps `tau_k`.
 - **Deprecated `gbar_kA` route** — `states.gbar_block_state` (alias
   `four_ap_state`) still reduces the A-current, but on the realistic log-normal
