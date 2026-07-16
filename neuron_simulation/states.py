@@ -12,11 +12,46 @@ is the epilepsy model.
 * ``seizure_state`` -> large ``tau_k`` (e.g. 2500 ms; impaired buffering; [K+]o
   accumulates into the ictal range; elevated, seizure-like firing).
 
-The old reduced-``gbar_kA`` "4-AP" state is kept as :func:`gbar_block_state`
-(with a back-compatible :func:`four_ap_state` alias) but is **deprecated to a
-phenomenological knob**: on the realistic log-normal topology, changing
-``gbar_kA`` does not faithfully reproduce the seizure phenotype (the dramatic
-reduced-A-current effect was specific to the dense discrete-hub topology).
+The reduced-``gbar_kA`` "4-AP" state is kept as :func:`gbar_block_state` (alias
+:func:`four_ap_state`) for API compatibility only. It is **inert at the shipped
+``kA`` parameters and must not be used as a seizure knob**.
+
+Measured, not inferred: ``kA.mod`` ships ``vhalfm = -27 mV`` / ``km = 16`` and the
+conductance is ``m^4``, so the conductance half-activates ~26.6 mV depolarized of
+the m-gate, at ``-0.4 mV`` -- where ``h`` (``vhalfh = -60``, ``kh = 6``) is fully
+inactivated. Peak steady-state window conductance is 1.9e-6 S/cm2 = 0.005% of the
+``hh`` delayed rectifier, and over -65..-50 mV ``g_kA`` is under 2% of the leak
+conductance. Blocking it does nothing to the burst phenotype, at any dose, on any
+topology. Pinned by ``tests/test_kA_characterization.py``. (The subthreshold bound
+is on conductance: the leak *current* crosses zero at ``el_hh = -54.3 mV``, so a
+current ratio there is unbounded and would not mean anything.)
+
+The ``gbar_kA`` numbers are nonetheless retained rather than zeroed, so existing
+datasets reproduce bit-for-bit. Inertness is a *subthreshold* claim; ``m^4`` is
+non-negligible at the spike peak, so zeroing ``gbar_kA`` perturbs spike waveforms
+and this chaotic network turns that into a different spike train -- the arms are
+bit-identical until t = 2175.5 ms, and by 20 s all 926 trains differ. Measured by
+``scripts/check_ka_contribution.py``. (That run's spike counts, 6180 vs 4442, are
+one burst of window quantization, not a rate effect, and its window is too short
+to compare burst statistics -- 2 inter-burst intervals for one arm, 1 for the
+other. It settles bitwise identity only; the phenotype claim above rests on the
+conductance arithmetic instead.)
+
+An earlier version of this note attributed the flat dose-response to the log-normal
+topology and claimed a "dramatic reduced-A-current effect" on the dense discrete-hub
+topology. That claim is unsupported and has been removed: ``git log`` shows
+``vhalfm`` has never held another value and ``kA_globals`` has no call sites, so the
+current has been inert on every topology this repo has ever run. An inert mechanism
+cannot produce a topology-dependent effect; any such effect came from the companion
+LIF project's separate A-current implementation.
+
+Setting ``vhalfm = -54`` restores the documented behaviour (conductance V1/2 =
+-27.4 mV) and gives a functional current at the single-cell level, but still yields
+no network dose-response: the ``sAHP`` per-spike increment is 1.2-2.6x the leak
+conductance and decays over 4-6.5 s, dominating the adaptation budget on the
+seconds-scale timescale that sets burst rate. A working ``gbar_kA`` knob needs sAHP
+re-balanced against I_A, not just a gating fix -- and the gating fix alone shifts the
+tuned baseline. Not applied here.
 
 Each "state" is just a dict of keyword overrides for
 :func:`neuron_simulation.network_builder.build_network`.
@@ -100,13 +135,13 @@ def seizure_state(severity=1.0):
 
 
 def gbar_block_state(block_fraction=0.2):
-    """Return build overrides for a reduced-A-current state (DEPRECATED knob).
+    """Return build overrides for a reduced-A-current state (INERT; API-compat only).
 
-    Phenomenological only. On the realistic log-normal topology, reducing
-    ``gbar_kA`` does NOT faithfully reproduce seizure -- it shifts burst frequency
-    with a topology-dependent sign/magnitude. Use :func:`seizure_state` for the
-    mechanistic (K+-accumulation) seizure model. Retained for the dense
-    discrete-hub topology where the reduced-A-current effect was dramatic.
+    The A-current is **inert at the shipped ``kA`` parameters**, so this state is a
+    no-op at any ``block_fraction``, on any topology: it returns a reduced
+    ``gbar_kA`` that the mechanism does not act on. See the module docstring for the
+    measured numbers. Use :func:`seizure_state` for the mechanistic
+    (K+-accumulation) seizure model.
 
     Args:
         block_fraction: Fraction of the A-current removed, in ``[0, 1)``.
@@ -174,10 +209,12 @@ def seizure_dose_response(n_points=6, min_tau_k=NORMAL_TAU_K, max_tau_k=SEIZURE_
 
 
 def dose_response_gbar(n_points=8, min_fraction=1.0, max_fraction=0.2):
-    """Build a descending A-current-density sweep (DEPRECATED / phenomenological).
+    """Build a descending A-current-density sweep (INERT; API-compat only).
 
-    Retained for the discrete-hub topology. Prefer :func:`seizure_dose_response`
-    (K+ clearance) for the mechanistic seizure model.
+    The A-current is inert at the shipped ``kA`` parameters, so this sweep is flat
+    by construction -- every point returns the same network behaviour. See the
+    module docstring. Use :func:`seizure_dose_response` (K+ clearance) for the
+    mechanistic seizure model.
 
     Args:
         n_points: Number of gbar values in the sweep.

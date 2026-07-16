@@ -3,17 +3,20 @@
 A biophysical spiking-network model of spontaneous **network bursts** and their
 transition into a **seizure (ictal) state**, in a clustered culture built in
 [NEURON](https://neuron.yale.edu/). Single-compartment Hodgkin–Huxley neurons
-carry a custom **A-type / Kv4-like potassium current** (`kA`) and a **dynamic
-extracellular-potassium** mechanism (`kdyn`). The network is driven only by weak
-per-neuron Poisson background input and produces discrete, high-participation
-network bursts.
+carry a **dynamic extracellular-potassium** mechanism (`kdyn`) and two-timescale
+spike-triggered adaptation (`sAHP`). A custom **A-type / Kv4-like potassium
+current** (`kA`) is present but **inert at its shipped parameters** — see
+[The A-current is inert](#the-a-current-is-inert-and-gbar_ka-is-a-dead-parameter).
+The network is driven only by weak per-neuron Poisson background input and
+produces discrete, high-participation network bursts.
 
 **The seizure knob is impaired glial K⁺ clearance (`tau_k`), not a reduced
 A-current.** Firing raises [K⁺]ₒ → the K⁺ reversal E_K depolarizes (Nernst) →
 positive feedback toward an ictal state; glial/diffusive clearance is the
 negative feedback that terminates it. Weak clearance (large `tau_k`) is the
-epilepsy model. The old reduced-`gbar_kA` "4-AP" route is **deprecated to a
-phenomenological knob** (see below).
+epilepsy model. The old reduced-`gbar_kA` "4-AP" route is **non-functional**: the
+A-current is inert at its shipped parameters, so blocking it does nothing at any
+dose (see below).
 
 The project deliberately mirrors the companion **LIF project**
 ([LIF-Project](https://github.com/xiaoxuanren/LIF-Project),
@@ -29,7 +32,7 @@ unmodified.
 ```
 neuron_simulation/
   mechanisms/
-    kA.mod              # A-type K+ current (Kv4-like), fast htau (20 ms)
+    kA.mod              # A-type K+ current (Kv4-like) -- INERT at shipped params
     kdyn.mod            # dynamic [K+]o accumulation -> ek (the SEIZURE substrate)
     DepSyn.mod          # depressing excitatory synapse (short-term depression)
     README.md           # how to compile: `nrnivmodl mechanisms`
@@ -37,7 +40,7 @@ neuron_simulation/
   topology.py           # clustered+hub AND log-normal-degree builders
   network_builder.py    # assemble a NEURON net from a topology (cells, synapses, NetCons, noise)
   noise.py              # Poisson background (NetStim -> ExpSyn); per-recording Random123 streams
-  states.py             # normal vs seizure (tau_k) states; deprecated gbar_block knob
+  states.py             # normal vs seizure (tau_k) states; inert gbar_block knob
   simulation.py         # run(): finitialize/continuerun, spike + optional voltage + [K+]o recording
   workflows.py          # topology->network->run->save spikes + ground truth; dataset generation
   analysis.py           # participation-based network-burst detection (post burn-in), burst stats
@@ -115,8 +118,9 @@ This produces `nrnmech.dll` (Windows) or an `x86_64/` build directory
 
 Open [`notebooks/neuron_network_simulation.ipynb`](notebooks/neuron_network_simulation.ipynb).
 It builds a log-normal topology, **verifies the network bursts in the normal
-state**, compares normal vs 4-AP, traces a dose-response curve, saves a dataset,
-and finally runs inference on the generated data.
+state**, compares normal vs seizure across the single `sahp_ainc_slow` knob,
+sweeps that knob, saves a dataset from the same wiring, and finally runs
+inference on the generated data.
 
 ### 4. Or from Python
 
@@ -150,9 +154,14 @@ python inference/adapter.py latest        # CCG + learned-LIF, reports AUC / FDR
   runs with faster `kA` kinetics via a q10 factor.
 
 - **A-current (`kA.mod`).** Fast activation `m` and inactivation `h`
-  (`htau0 = 20 ms`), reversal at `ek`; `I_kA = gbar · m⁴ · h · (v − ek)`. It
-  shapes crisp discrete bursts. `gbar_kA` is retained only as a phenomenological
-  knob (`gbar_block_state`), **not** a faithful 4-AP model — see below.
+  (`htau0 = 20 ms`), reversal at `ek`; `I_kA = gbar · m⁴ · h · (v − ek)`. **It is
+  inert at its shipped parameters and shapes nothing.** The `m⁴` exponent puts the
+  conductance V½ at `vhalfm + 1.665·km` = **−0.4 mV** (`vhalfm = -27`, `km = 16`),
+  where `h` is fully inactivated: peak steady-state window conductance is
+  `1.88e-6 S/cm²` (**0.005%** of the `hh` gK) and over −65…−50 mV `g_kA` is
+  **under 2%** of the leak conductance. `gbar_kA` is a **dead parameter** — reducing it does
+  nothing at any dose, on any topology. See
+  [The A-current is inert](#the-a-current-is-inert-and-gbar_ka-is-a-dead-parameter).
 
 - **Dynamic [K⁺]ₒ (`kdyn.mod`).** `ek` is written from the Nernst equation on a
   state variable `[K⁺]ₒ` that rises with K⁺ efflux (firing) and is cleared with
@@ -179,7 +188,7 @@ subthreshold** so the network integrates rather than chain-reacting from noise:
 | `noise_rate` | `2.5` Hz | sparse ignition seed |
 | `exc_weight_scale` | `1.5` | recurrent gain |
 | `inh_weight_scale` | `1.5` | recurrent inhibition |
-| `htau0_kA` | `20 ms` | fast A-current inactivation (crisp bursts) |
+| `htau0_kA` | `20 ms` | A-current inactivation — **no effect** (`kA` is inert) |
 | `tau_k` | `200 ms` (normal) | K⁺ clearance (seizure knob) |
 
 **Verified normal state:** mean rate **2.6 Hz**, network bursts (**93%
@@ -219,11 +228,73 @@ A-current:
   state. **Verified:** [K⁺]ₒ rises to **~12–14 mM**, firing ~**8 Hz**, discrete
   bursts merge into sustained activity. `states.seizure_state(severity)`;
   `states.seizure_dose_response()` sweeps `tau_k`.
-- **Deprecated `gbar_kA` route** — `states.gbar_block_state` (alias
-  `four_ap_state`) still reduces the A-current, but on the realistic log-normal
-  topology this does **not** faithfully reproduce seizure (the dramatic
-  reduced-A-current effect was specific to the dense discrete-hub topology). Kept
-  as a phenomenological option only.
+- **Non-functional `gbar_kA` route** — `states.gbar_block_state` (alias
+  `four_ap_state`) still reduces the `gbar_kA` *number*, but the A-current is inert
+  at its shipped parameters, so nothing changes at any dose. Kept for API
+  compatibility only. See
+  [The A-current is inert](#the-a-current-is-inert-and-gbar_ka-is-a-dead-parameter).
+
+### The A-current is inert (and `gbar_kA` is a dead parameter)
+
+`kA.mod` computes `g = gbar · m⁴ · h`. The `m⁴` exponent means the **conductance**
+half-activates at `vhalfm + 1.665·km` — **26.6 mV depolarized of the m-gate** (`km = 16`).
+The shipped `vhalfm = -27 mV` therefore puts the conductance V½ at **−0.4 mV**, where the
+inactivation gate `h` (V½ = −60 mV, `kh = 6`) is fully closed.
+
+| quantity | value |
+|---|---|
+| peak steady-state window conductance | `1.88e-6 S/cm²` = **0.005%** of `hh` gK |
+| `g_kA` at −65…−50 mV (subthreshold) | **<2%** of leak (`3e-4 S/cm²`) |
+| effect of reducing `gbar_kA` at any dose | **none** on the burst phenotype (rate, IBI, participation) |
+
+**It is not, however, bitwise neutral — do not "clean up" `gbar_kA` to zero.**
+Inertness is a *subthreshold* statement; `m⁴` is still non-negligible at the spike
+peak, so zeroing `gbar_kA` perturbs spike waveforms, and this chaotic recurrent
+network amplifies that into a different spike train. Measured by
+[`scripts/check_ka_contribution.py`](scripts/check_ka_contribution.py), which runs
+the notebook's network twice changing only `gbar_kA`: the arms are bit-identical
+until **t = 2175.5 ms** and then diverge, and by 20 s **all 926** spike trains
+differ. That is the whole basis for retaining the shipped values, and it is
+independent of anything below.
+
+> **Do not read that run's spike counts (6180 vs 4442) as a −28% firing-rate
+> effect.** They are one burst of window quantization. 83% of spikes fall inside
+> bursts and arm A averages **1703 spikes/burst**, so the 1738-spike gap is a
+> single burst: arm A's third burst peaks at **19380 ms**, just inside the 20 s
+> window, while arm B has not fired its third by 20000 ms. Bursts 1 and 2 land at
+> essentially the same times in both arms (5258/5258, 12350/12342 ms). The window
+> is also far too short to compare burst *statistics* — it yields **2 inter-burst
+> intervals for arm A and 1 for arm B** — so that run settles bitwise identity
+> only, and no phenotype claim should be drawn from it. The "no effect on the
+> burst phenotype" row above rests on the conductance arithmetic (0.005% of gK),
+> not on that run. A properly powered phenotype comparison needs a window of
+> minutes, and is not required for any decision here.
+
+This has been true since the initial commit: `git log` shows `vhalfm` has never held
+another value, and `build_network(kA_globals=...)` has no call sites. **The A-current has
+been inert on every topology this repo has ever run.** A previously-documented claim that
+"the dramatic reduced-A-current effect was specific to the dense discrete-hub topology"
+was therefore unsupported and has been removed — an inert mechanism cannot produce a
+topology-dependent effect. If such an effect was observed, it came from the companion
+[LIF-Project](https://github.com/xiaoxuanren/LIF-Project)'s separate A-current
+implementation, not from this `kA.mod`. Pinned by `tests/test_kA_characterization.py`.
+
+**Why this is not simply patched.** Setting `vhalfm = -54` restores the documented
+behaviour (conductance V½ = −27.4 mV) and yields a functional current at the single-cell
+level — under 0.1 nA injection, control fires 1 spike vs 33 with the current fully
+blocked, i.e. it gates rheobase as an A-current should. But it still produces **no network
+dose-response** (mean rate 0.298 / 0.317 / 0.296 Hz at 0 / 50 / 100% block — within
+seed-to-seed noise), because the `sAHP` per-spike increment is **1.2–2.6× the leak
+conductance** and decays over 4–6.5 s, dominating the adaptation budget on the seconds
+timescale that sets burst rate. A functional `gbar_kA` knob requires re-balancing `sAHP`
+against `I_A`, not just a gating fix — and the gating fix alone shifts the tuned baseline
+(control burst rate 0.182 → 0.136 Hz), forcing a re-tune and dataset regeneration. The
+patch is tracked separately and is **not** applied on this branch.
+
+Independently: 4-AP's epileptogenic action in slice is thought to be substantially
+**presynaptic** (AP broadening → enhanced transmitter release). This model has point
+neurons with event-driven synapses and structurally cannot reproduce that, so a faithful
+4-AP model would need synaptic weights scaled alongside `gbar_kA` regardless.
 
 ### Two bug fixes
 
@@ -342,20 +413,20 @@ recording files; spike times are in **milliseconds**. Inference-critical fields
   dissociated cultures. The fast regime is convenient for generating many bursts
   quickly for inference; slowing it toward culture-realistic spacing would need
   weaker drive and stronger slow adaptation.
-- **Reduced-A-current is not a faithful 4-AP model here.** The dramatic
-  reduced-`gbar_kA` effect was specific to the dense discrete-hub topology; on the
-  realistic log-normal topology it changes burst frequency in a
-  topology-dependent, sometimes wrong-signed way. Use the K⁺-clearance
-  (`tau_k`) seizure model instead; `gbar_block_state` is kept only as a
-  phenomenological knob (mainly useful with the discrete-hub builder).
+- **Reduced-A-current is not a 4-AP model here — it does nothing at all.** The
+  A-current is inert at its shipped parameters, so `gbar_kA` is a dead parameter on
+  every topology. Use the K⁺-clearance (`tau_k`) seizure model instead;
+  `gbar_block_state` is kept for API compatibility only. See
+  [The A-current is inert](#the-a-current-is-inert-and-gbar_ka-is-a-dead-parameter).
 - **Squid HH kinetics.** The default 6.3 °C `hh` is the classic squid model, not
   mammalian cortex. The 34 °C variant speeds kinetics but is still a caricature.
 - **`kdyn` is a lumped caricature.** [K⁺]ₒ is a single well-mixed pool per soma
   with a lumped efflux coupling and fixed `ki` — enough to reproduce the
   accumulation → depolarization → runaway loop, not a spatially-resolved ion
   model.
-- **The A-current is a compact caricature**, not a fit to a specific Kv4 channel;
-  parameters were tuned for network bursting, not channel realism.
+- **The A-current is a compact caricature**, not a fit to a specific Kv4 channel —
+  and at its shipped gating it is inert, so it contributes nothing to the tuned
+  bursting regime.
 
 ---
 

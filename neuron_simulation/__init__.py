@@ -2,7 +2,9 @@
 
 A single-compartment Hodgkin-Huxley + A-current (Kv4-like) clustered network
 that produces spontaneous synchronized network bursts under Poisson background
-drive, with the A-current density ``gbar_kA`` as a 4-AP knob. Structured to
+drive. The seizure knob is ``tau_k`` (K+ clearance); the A-current density
+``gbar_kA`` is a dead parameter -- ``kA`` is inert at its shipped parameters
+(see :mod:`neuron_simulation.states`). Structured to
 mirror the LIF project's ``lif_simulation`` package and to write session data in
 the exact format its inference pipeline consumes.
 
@@ -12,7 +14,9 @@ Public API (see the individual modules for full docstrings):
 * neurons: :func:`build_cell`, :func:`load_mechanisms`, :class:`Cell`
 * network_builder: :func:`build_network`, :class:`Network`
 * noise: :func:`add_poisson_noise`
-* states: :func:`normal_state`, :func:`four_ap_state`, :func:`dose_response_gbar`
+* states: :func:`normal_state`, :func:`seizure_state`, :func:`seizure_dose_response`
+  (the live K+-clearance knob); :func:`four_ap_state` / :func:`dose_response_gbar`
+  are inert and kept only for API compatibility
 * simulation: :func:`run_simulation`
 * analysis: :func:`detect_network_bursts`, :func:`burst_statistics`
 * io: :func:`save_network_structure`, :func:`save_recording_data`, loaders

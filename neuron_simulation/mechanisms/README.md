@@ -4,7 +4,7 @@ Three custom NEURON mechanisms back the biophysics of this project:
 
 | File | Mechanism | Role |
 |------|-----------|------|
-| `kA.mod` | `kA` (density) | A-type / Kv4-like transient K⁺ current (`htau0 = 20 ms`); shapes crisp bursts. |
+| `kA.mod` | `kA` (density) | A-type / Kv4-like transient K⁺ current (`htau0 = 20 ms`). **Inert at its shipped parameters** — shapes nothing; `gbar` is a dead parameter. |
 | `kdyn.mod` | `kdyn` (density) | Dynamic [K⁺]ₒ accumulation → writes `ek` (Nernst). **`tau_k` is the seizure knob.** |
 | `DepSyn.mod` | `DepSyn` (point process) | Depressing excitatory synapse (short-term depression; `d=0` ⇒ static). |
 
@@ -56,9 +56,11 @@ Seizure is modelled with `kdyn`: firing raises [K⁺]ₒ → `ek` depolarizes (N
 - Seizure: `tau_k = 2500 ms` (impaired buffering) → [K⁺]ₒ climbs to ~12 mM →
   ictal runaway. `ki = 72 mM` fixes resting E_K = −77 mV.
 
-`gbar_kA` (A-current density, S/cm²) is retained only as a **phenomenological**
-knob (`states.gbar_block_state`), **not** a faithful 4-AP model: on the realistic
-log-normal topology, reducing it does not reproduce the seizure phenotype.
+`gbar_kA` (A-current density, S/cm²) is a **dead parameter**, not a 4-AP model:
+the `kA` mechanism is **inert at its shipped parameters**, so reducing `gbar_kA`
+does nothing at any dose, on any topology. `states.gbar_block_state` is retained
+for API compatibility only. See the inertness note in `kA.mod`, the README section
+"The A-current is inert", and `tests/test_kA_characterization.py`.
 
 See `neuron_simulation/states.py` for `normal_state` / `seizure_state` /
-`seizure_dose_response` (and the deprecated `gbar_block_state`).
+`seizure_dose_response` (and the inert `gbar_block_state`).

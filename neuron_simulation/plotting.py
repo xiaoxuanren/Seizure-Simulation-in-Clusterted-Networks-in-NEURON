@@ -229,12 +229,17 @@ def plot_topology_map(neuron_positions, connections, cluster_assignments, is_inh
     return fig
 
 
-def plot_state_comparison(normal, four_ap, n_neurons, duration_ms, burn_in_ms=1000.0):
-    """Plot normal vs 4-AP rasters side by side for a burst-frequency contrast.
+def plot_state_comparison(normal, other, n_neurons, duration_ms, burn_in_ms=1000.0):
+    """Plot two states' rasters side by side for a burst-frequency contrast.
+
+    Pair ``normal`` with a state that actually moves the network -- e.g.
+    :func:`neuron_simulation.states.seizure_state` (K+ clearance) or an
+    ``sahp_ainc_slow`` change. A reduced-``gbar_kA`` state produces no contrast:
+    the A-current is inert (see :mod:`neuron_simulation.states`).
 
     Args:
         normal: ``(spike_data, label)`` tuple for the normal state.
-        four_ap: ``(spike_data, label)`` tuple for the 4-AP state.
+        other: ``(spike_data, label)`` tuple for the state to compare against.
         n_neurons: Total number of neurons.
         duration_ms: Recording duration in milliseconds.
         burn_in_ms: Startup transient marked on each panel.
@@ -243,7 +248,7 @@ def plot_state_comparison(normal, four_ap, n_neurons, duration_ms, burn_in_ms=10
         The Matplotlib ``Figure``.
     """
     fig, axes = plt.subplots(2, 1, figsize=(11, 8), sharex=True)
-    for ax, (spike_data, label) in zip(axes, (normal, four_ap)):
+    for ax, (spike_data, label) in zip(axes, (normal, other)):
         bursts = detect_network_bursts(spike_data, n_neurons, duration_ms, burn_in_ms=burn_in_ms)
         for nid, spikes in spike_data.items():
             s = np.asarray(spikes, dtype=float)
