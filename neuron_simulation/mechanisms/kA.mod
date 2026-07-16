@@ -12,21 +12,30 @@ Biophysics
     h : slow, voltage-gated INACTIVATION gate (closes on depolarization and
         recovers slowly at rest)
 
-The inactivation ``h`` (time constant ``htau0``, default 20 ms) shapes the
-fast transient outward current that helps sculpt crisp, discrete bursts. (An
-earlier 300 ms "slow pacer" variant is deprecated -- it gave mushier bursts.)
+The inactivation ``h`` has time constant ``htau0`` (default 20 ms; an earlier
+300 ms "slow pacer" variant is deprecated). ``htau0`` does not currently affect
+network output either -- see the inertness note below.
 
-NOTE: on the realistic log-normal topology, reducing ``gbar`` does NOT
-faithfully reproduce seizure. The mechanistically correct seizure route is
-dynamic [K+]o accumulation (see kdyn.mod); reduced-``gbar`` is retained only as
-a phenomenological knob.
+!!! THIS MECHANISM IS INERT AT ITS SHIPPED PARAMETERS !!!
+    g = gbar * m^4 * h, so the CONDUCTANCE half-activates at vhalfm + 1.665*km --
+    ~26.6 mV DEPOLARIZED of the m-gate (km = 16). The shipped vhalfm = -27 mV
+    therefore puts the conductance V1/2 at -0.4 mV, where h (vhalfh = -60, kh = 6)
+    is fully inactivated.
+        peak steady-state window g = 1.88e-6 S/cm2 = 0.005% of hh gK
+        g_kA at -65..-50 mV        = under 2% of leak (3e-4 S/cm2)
+    ``gbar`` is a DEAD PARAMETER: reducing it does nothing to the burst phenotype
+    at any dose, on any topology. Do NOT use it as a 4-AP or seizure knob. The
+    live seizure route is dynamic [K+]o accumulation (kdyn.mod).
 
-The gbar knob (phenomenological / deprecated as a 4-AP model)
-    ``gbar`` (S/cm2) is nominally the target of 4-aminopyridine (4-AP).
-    Normal ~0.006 S/cm2. A partial reduction of ``gbar`` (e.g. 0.0045-0.005
-    S/cm2) shifts burst frequency, but on the realistic topology the sign and
-    magnitude of that effect are not a faithful 4-AP model -- see
-    ``neuron_simulation/states.py``.
+    But do NOT zero gbar either: the above is a SUBTHRESHOLD statement, and m^4
+    is non-negligible at the spike peak, so zeroing gbar perturbs spike waveforms
+    and this chaotic network amplifies that into a different spike train (all 926
+    trains differ by 20 s; burst statistics unchanged). The shipped values are
+    retained so existing datasets reproduce bit-for-bit -- measured by
+    scripts/check_ka_contribution.py.
+
+    Pinned by tests/test_kA_characterization.py. See the README section "The
+    A-current is inert" for why vhalfm = -54 is not applied here.
 
 Temperature
     Base time constants ``mtau0``/``htau0`` are defined at ``temp`` = 6.3 degC
@@ -55,15 +64,15 @@ UNITS {
 }
 
 PARAMETER {
-    gbar   = 0.006 (S/cm2)  : A-current density; THE 4-AP knob (reduce = block)
+    gbar   = 0.006 (S/cm2)  : A-current density; DEAD PARAMETER (see COMMENT)
     vhalfm = -27   (mV)     : activation half-activation voltage
     km     = 16    (mV)     : activation slope factor (larger = shallower)
     vhalfh = -60   (mV)     : inactivation half-voltage (slow gate)
     kh     = 6     (mV)     : inactivation slope factor
     mtau0  = 1.0   (ms)     : activation time constant at temp (fast)
-    htau0  = 20    (ms)     : inactivation time constant at temp (fast -> crisp
-                            : discrete bursts; 300 ms slow-pacer variant gave
-                            : mushier bursts and is deprecated)
+    htau0  = 20    (ms)     : inactivation time constant at temp (300 ms
+                            : slow-pacer variant is deprecated). No effect on
+                            : network output while the mechanism is inert.
     q10    = 3              : temperature sensitivity of the gating kinetics
     temp   = 6.3   (degC)   : reference temperature for mtau0/htau0
 }
