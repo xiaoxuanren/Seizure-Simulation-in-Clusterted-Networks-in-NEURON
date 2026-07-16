@@ -53,8 +53,9 @@ Seizure is modelled with `kdyn`: firing raises [K⁺]ₒ → `ek` depolarizes (N
 → positive feedback. Glial/diffusive clearance (`tau_k`) is the negative feedback.
 
 - Normal: `tau_k = 200 ms` (strong buffering) → [K⁺]ₒ ~4 mM → discrete bursts.
-- Seizure: `tau_k = 2500 ms` (impaired buffering) → [K⁺]ₒ climbs to ~12 mM →
-  ictal runaway. `ki = 72 mM` fixes resting E_K = −77 mV.
+- Seizure: `tau_k = 12000 ms` (impaired buffering, `severity=1.0`) → [K⁺]ₒ climbs
+  to ~8 mM → ictal state, bounded by the residual sAHP that `seizure_state` also
+  reduces. `ki = 72 mM` fixes resting E_K = −77 mV.
 
 `gbar_kA` (A-current density, S/cm²) is retained only as a **phenomenological**
 knob (`states.gbar_block_state`), **not** a faithful 4-AP model: on the realistic
