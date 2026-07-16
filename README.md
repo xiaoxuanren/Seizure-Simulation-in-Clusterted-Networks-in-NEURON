@@ -254,9 +254,21 @@ network amplifies that into a different spike train. Measured by
 [`scripts/check_ka_contribution.py`](scripts/check_ka_contribution.py), which runs
 the notebook's network twice changing only `gbar_kA`: the arms are bit-identical
 until **t = 2175.5 ms** and then diverge, and by 20 s **all 926** spike trains
-differ (6180 vs 4442 spikes) — while the burst statistics stay put (mean IBI
-7062 → 7077 ms, participation 0.92 vs 0.95). So the *phenotype* is untouched, the
-*bits* are not, and the shipped values are retained so existing datasets reproduce.
+differ. That is the whole basis for retaining the shipped values, and it is
+independent of anything below.
+
+> **Do not read that run's spike counts (6180 vs 4442) as a −28% firing-rate
+> effect.** They are one burst of window quantization. 83% of spikes fall inside
+> bursts and arm A averages **1703 spikes/burst**, so the 1738-spike gap is a
+> single burst: arm A's third burst peaks at **19380 ms**, just inside the 20 s
+> window, while arm B has not fired its third by 20000 ms. Bursts 1 and 2 land at
+> essentially the same times in both arms (5258/5258, 12350/12342 ms). The window
+> is also far too short to compare burst *statistics* — it yields **2 inter-burst
+> intervals for arm A and 1 for arm B** — so that run settles bitwise identity
+> only, and no phenotype claim should be drawn from it. The "no effect on the
+> burst phenotype" row above rests on the conductance arithmetic (0.005% of gK),
+> not on that run. A properly powered phenotype comparison needs a window of
+> minutes, and is not required for any decision here.
 
 This has been true since the initial commit: `git log` shows `vhalfm` has never held
 another value, and `build_network(kA_globals=...)` has no call sites. **The A-current has

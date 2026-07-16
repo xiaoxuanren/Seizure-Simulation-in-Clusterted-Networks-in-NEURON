@@ -110,6 +110,35 @@ LOOSE_PARTICIPATION_THRESHOLD = 0.35
 #: "identical" is vacuous rather than informative.
 MIN_SPIKES = 1000
 MIN_BURSTS = 3
+#: Inter-burst intervals needed per arm before the burst statistics mean anything.
+#: At 20 s this network gives 1-2, so its "mean IBI" is a mean over a single
+#: sample -- reported, but flagged as underpowered rather than quoted as evidence.
+MIN_IBI_SAMPLES = 5
+
+
+def _spikes_per_burst(spike_data, bursts):
+    """Mean number of spikes falling inside the detected burst windows.
+
+    Used to express a spike-count delta in units of bursts: on a short window that
+    delta is usually just whether the last burst landed inside it, not a change in
+    firing rate.
+
+    Args:
+        spike_data: ``{gid: np.ndarray}`` spike times (ms).
+        bursts: Burst dicts from :func:`analysis.detect_network_bursts`.
+
+    Returns:
+        Mean spikes per burst, or ``None`` when no bursts were detected.
+    """
+    if not bursts:
+        return None
+    inside = 0
+    for b in bursts:
+        start, end = b["start_ms"], b["end_ms"]
+        for times in spike_data.values():
+            t = np.asarray(times, dtype=float)
+            inside += int(((t >= start) & (t <= end)).sum())
+    return inside / float(len(bursts))
 
 #: The two arms: label -> (gbar_kA_exc, gbar_kA_inh).
 ARMS = {"A": (0.006, 0.004), "B": (0.0, 0.0)}
@@ -179,14 +208,18 @@ def _load_spikes(path):
 
 
 def _burst_stats(spike_data, n_neurons, duration):
-    """Burst statistics under the notebook's loose (>=35% participation) detector."""
+    """Detect bursts with the notebook's loose (>=35% participation) detector.
+
+    Returns:
+        A tuple ``(bursts, stats)``.
+    """
     from neuron_simulation import analysis
 
     bursts = analysis.detect_network_bursts(
         spike_data, n_neurons, duration,
         participation_threshold=LOOSE_PARTICIPATION_THRESHOLD, burn_in_ms=0.0,
     )
-    return analysis.burst_statistics(bursts, duration, burn_in_ms=0.0)
+    return bursts, analysis.burst_statistics(bursts, duration, burn_in_ms=0.0)
 
 
 def compare(spikes_a, spikes_b, duration):
@@ -210,8 +243,8 @@ def compare(spikes_a, spikes_b, duration):
 
     total_a = sum(len(v) for v in spikes_a.values())
     total_b = sum(len(v) for v in spikes_b.values())
-    stats_a = _burst_stats(spikes_a, n_neurons, duration)
-    stats_b = _burst_stats(spikes_b, n_neurons, duration)
+    bursts_a, stats_a = _burst_stats(spikes_a, n_neurons, duration)
+    bursts_b, stats_b = _burst_stats(spikes_b, n_neurons, duration)
     rate_a = total_a / (n_neurons * duration / 1000.0)
 
     print()
@@ -260,9 +293,22 @@ def compare(spikes_a, spikes_b, duration):
     print()
     print("  neurons whose trains differ : %d / %d (%.1f%%)"
           % (len(differing), n_neurons, 100.0 * len(differing) / n_neurons))
-    print("  max spike-time delta        : %.4f ms (over the common prefix)" % max_delta)
+    print("  max spike-time delta        : %.4f ms (index-wise over the common"
+          % max_delta)
+    print("                                prefix; meaningless once trains desync)")
     print("  total spike count           : A=%d  B=%d  (delta %+d)"
           % (total_a, total_b, total_b - total_a))
+
+    # A spike-count delta on a short window is dominated by whether the last burst
+    # landed inside it. Say so numerically rather than let the reader infer a rate
+    # effect that is not there.
+    spb = _spikes_per_burst(spikes_a, bursts_a)
+    if spb:
+        print("                                (~%.0f spikes/burst, so this delta is"
+              % spb)
+        print("                                ~%.1f bursts of window quantization)"
+              % (abs(total_b - total_a) / spb))
+
     print()
     print("  burst statistics (loose detector, participation>=%.2f, burn_in=0):"
           % LOOSE_PARTICIPATION_THRESHOLD)
@@ -272,6 +318,20 @@ def compare(spikes_a, spikes_b, duration):
         va, vb = stats_a.get(key), stats_b.get(key)
         if isinstance(va, (int, float)) and isinstance(vb, (int, float)):
             print("    %-22s %12.4f %12.4f %+12.4f" % (key, va, vb, vb - va))
+
+    # An IBI "mean" over 1-2 intervals is not a statistic. Make the sample size
+    # visible so nobody quotes the delta as evidence the phenotype is unchanged.
+    n_ibi_a, n_ibi_b = max(stats_a["n_bursts"] - 1, 0), max(stats_b["n_bursts"] - 1, 0)
+    print("    %-22s %12d %12d" % ("(mean_ibi_ms samples)", n_ibi_a, n_ibi_b))
+    if min(n_ibi_a, n_ibi_b) < MIN_IBI_SAMPLES:
+        print()
+        print("  !! The burst statistics above are UNDERPOWERED at this duration")
+        print("     (need >=%d inter-burst intervals per arm; got %d and %d). They are"
+              % (MIN_IBI_SAMPLES, n_ibi_a, n_ibi_b))
+        print("     diagnostic only -- do NOT quote them as evidence that the burst")
+        print("     phenotype is or is not affected. This run tests BITWISE IDENTITY,")
+        print("     which is what the retain/zero decision actually turns on.")
+
     print()
     print("The arms diverge, so zeroing gbar_kA would break reproduction of the")
     print("existing datasets. Retain the shipped values.")

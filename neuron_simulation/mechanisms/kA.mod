@@ -29,10 +29,13 @@ network output either -- see the inertness note below.
 
     But do NOT zero gbar either: the above is a SUBTHRESHOLD statement, and m^4
     is non-negligible at the spike peak, so zeroing gbar perturbs spike waveforms
-    and this chaotic network amplifies that into a different spike train (all 926
-    trains differ by 20 s; burst statistics unchanged). The shipped values are
-    retained so existing datasets reproduce bit-for-bit -- measured by
-    scripts/check_ka_contribution.py.
+    and this chaotic network amplifies that into a different spike train (arms
+    bit-identical to t = 2175.5 ms; all 926 trains differ by 20 s). The shipped
+    values are retained so existing datasets reproduce bit-for-bit -- measured by
+    scripts/check_ka_contribution.py. That run settles bitwise identity ONLY: its
+    spike counts (6180 vs 4442) are one burst crossing the window edge, not a
+    rate effect, and 20 s gives too few inter-burst intervals to compare burst
+    statistics.
 
     Pinned by tests/test_kA_characterization.py. See the README section "The
     A-current is inert" for why vhalfm = -54 is not applied here.
