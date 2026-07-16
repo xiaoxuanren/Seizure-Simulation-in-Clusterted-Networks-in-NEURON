@@ -29,9 +29,13 @@ current ratio there is unbounded and would not mean anything.)
 The ``gbar_kA`` numbers are nonetheless retained rather than zeroed, so existing
 datasets reproduce bit-for-bit. Inertness is a *subthreshold* claim; ``m^4`` is
 non-negligible at the spike peak, so zeroing ``gbar_kA`` perturbs spike waveforms
-and this chaotic network turns that into a different spike train -- all 926 trains
-differ by 20 s, while the burst statistics do not move (mean IBI 7062 -> 7077 ms).
-Measured by ``scripts/check_ka_contribution.py``.
+and this chaotic network turns that into a different spike train -- the arms are
+bit-identical until t = 2175.5 ms, and by 20 s all 926 trains differ. Measured by
+``scripts/check_ka_contribution.py``. (That run's spike counts, 6180 vs 4442, are
+one burst of window quantization, not a rate effect, and its window is too short
+to compare burst statistics -- 2 inter-burst intervals for one arm, 1 for the
+other. It settles bitwise identity only; the phenotype claim above rests on the
+conductance arithmetic instead.)
 
 An earlier version of this note attributed the flat dose-response to the log-normal
 topology and claimed a "dramatic reduced-A-current effect" on the dense discrete-hub

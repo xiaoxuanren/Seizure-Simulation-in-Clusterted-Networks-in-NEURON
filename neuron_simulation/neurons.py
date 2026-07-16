@@ -130,9 +130,13 @@ def load_mechanisms(mechanisms_dir=None):
 #: waveforms, and this recurrent network is chaotic enough to amplify that into a
 #: different spike train. Verified, not assumed: ``scripts/check_ka_contribution.py``
 #: runs the notebook's network twice changing only gbar_kA, and the arms diverge at
-#: t = 2175.5 ms -- by 20 s all 926 spike trains differ (6180 vs 4442 spikes), while
-#: the burst statistics are unchanged (mean IBI 7062 vs 7077 ms). Do not "clean this
-#: up" to 0.0.
+#: t = 2175.5 ms -- by 20 s all 926 spike trains differ. Do not "clean this up" to 0.0.
+#:
+#: (That run's spike counts, 6180 vs 4442, are NOT a -28% rate effect: 83% of spikes
+#: are in bursts at ~1703 spikes/burst, so the gap is one burst crossing the window
+#: edge -- arm A's third burst peaks at 19380 ms, arm B's has not fired by 20000 ms.
+#: The window yields 2 inter-burst intervals for A and 1 for B, so it settles bitwise
+#: identity only; no phenotype conclusion follows from it, and none is needed here.)
 #:
 #: (That check ran on the notebook's current topology, ~926 neurons at 1.56%
 #: density. The sessions under ``NEURON data/`` were generated from a denser
