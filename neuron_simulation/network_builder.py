@@ -81,6 +81,12 @@ def build_network(
     celsius=6.3,
     gK_exc=15.0,
     gK_inh=10.0,
+    iext_exc=0.0,
+    iext_inh=0.0,
+    iext_sigma=0.0,
+    iext_hetero_seed=0,
+    ikpumpmax_exc=None,
+    ikpumpmax_inh=None,
     depression=True,
     depression_d=0.3,
     tau_d=500.0,
@@ -97,6 +103,7 @@ def build_network(
     noise_tau=3.0,
     noise_seed=1000,
     tau_k=200.0,
+    kdyn_epsilon=None,
     synapse_model="ampa_nmda",
     tau_nmda=150.0,
     nmda_ratio=2.5,
@@ -119,6 +126,10 @@ def build_network(
             reference, downmodulated toward ~0.3 to drive the 4-AP cascade.
         gK_inh: Delayed-rectifier density (mS/cm2) for inhibitory (FS) cells
             (10.0 drug-free reference).
+        iext_exc: External DC bias current (uA/cm2) injected into excitatory (PY)
+            cells to set the operating point (0 = off; negative = hyperpolarizing,
+            quiets the spontaneous pacemaking).
+        iext_inh: External DC bias current (uA/cm2) for inhibitory (FS) cells.
         depression: Whether excitatory synapses use short-term depression. When
             ``False`` the depression fraction is forced to 0 (static synapses).
         depression_d: Per-spike depression fraction for excitatory ``DepSyn``.
@@ -164,13 +175,21 @@ def build_network(
     n_neurons = topology["n_neurons"]
 
     # --- cells ---
+    # Optional per-cell iext heterogeneity (OFF by default, iext_sigma=0): a
+    # Gaussian spread around each population's iext center. This desynchronizes
+    # threshold crossings, the antidote to knife-edge all-or-none recruitment.
+    iext_rng = np.random.default_rng(iext_hetero_seed)
     cells = []
     for gid in range(n_neurons):
         inhibitory = bool(is_inh[gid])
+        iext_base = iext_inh if inhibitory else iext_exc
+        iext_cell = iext_base + (float(iext_rng.normal(0.0, iext_sigma)) if iext_sigma > 0 else 0.0)
         cell = build_cell(
             gid,
             is_inhibitory=inhibitory,
             gK=gK_inh if inhibitory else gK_exc,
+            iext=iext_cell,
+            ikpumpmax=ikpumpmax_inh if inhibitory else ikpumpmax_exc,
             cluster_id=int(cluster_assignments[gid]),
             spike_threshold=spike_threshold,
         )
@@ -178,6 +197,8 @@ def build_network(
         # a no-op if the kdyn mechanism is not inserted (e.g. before the upgrade).
         try:
             cell.soma(0.5).kdyn.tau_k = float(tau_k)
+            if kdyn_epsilon is not None:
+                cell.soma(0.5).kdyn.epsilon = float(kdyn_epsilon)
         except AttributeError:
             pass
         cells.append(cell)
@@ -235,6 +256,11 @@ def build_network(
         "celsius": float(celsius),
         "gK_exc": float(gK_exc),
         "gK_inh": float(gK_inh),
+        "iext_exc": float(iext_exc),
+        "iext_inh": float(iext_inh),
+        "iext_sigma": float(iext_sigma),
+        "ikpumpmax_exc": (None if ikpumpmax_exc is None else float(ikpumpmax_exc)),
+        "ikpumpmax_inh": (None if ikpumpmax_inh is None else float(ikpumpmax_inh)),
         "depression": bool(depression),
         "depression_d": effective_d,
         "tau_d": float(tau_d),
@@ -251,6 +277,7 @@ def build_network(
         "noise_tau": float(noise_tau),
         "noise_seed": int(noise_seed),
         "tau_k": float(tau_k),
+        "kdyn_epsilon": (None if kdyn_epsilon is None else float(kdyn_epsilon)),
         "synapse_model": str(synapse_model),
         "tau_nmda": float(tau_nmda),
         "nmda_ratio": float(nmda_ratio),
