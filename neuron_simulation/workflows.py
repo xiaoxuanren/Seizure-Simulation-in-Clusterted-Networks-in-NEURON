@@ -44,7 +44,7 @@ def run_single_state(
     Args:
         topology: A topology dict from :mod:`neuron_simulation.topology`.
         state: Optional state-override dict (e.g. from
-            :func:`neuron_simulation.states.normal_state`); its ``gbar_kA_*``
+            :func:`neuron_simulation.states.normal_state`); its ``gK_*``
             keys override ``build_kwargs``.
         build_kwargs: Base keyword arguments for
             :func:`neuron_simulation.network_builder.build_network`.
@@ -64,7 +64,7 @@ def run_single_state(
     state_name = "custom"
     if state is not None:
         state_name = state.get("state_name", "custom")
-        for key in ("gbar_kA_exc", "gbar_kA_inh", "tau_k", "sahp_ainc_slow", "sahp_ainc_fast"):
+        for key in ("gK_exc", "gK_inh", "tau_k", "sahp_ainc_slow", "sahp_ainc_fast"):
             if key in state:
                 build_kwargs[key] = state[key]
 
@@ -176,7 +176,7 @@ def generate_dataset(
     build_kwargs = dict(build_kwargs or {})
     if state is None:
         state = states_module.normal_state()
-    for key in ("gbar_kA_exc", "gbar_kA_inh", "tau_k"):
+    for key in ("gK_exc", "gK_inh", "tau_k"):
         if key in state:
             build_kwargs.setdefault(key, state[key])
 
