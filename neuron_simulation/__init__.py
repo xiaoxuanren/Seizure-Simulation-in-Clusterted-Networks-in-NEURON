@@ -12,7 +12,7 @@ Public API (see the individual modules for full docstrings):
 * neurons: :func:`build_cell`, :func:`load_mechanisms`, :class:`Cell`
 * network_builder: :func:`build_network`, :class:`Network`
 * noise: :func:`add_poisson_noise`
-* states: :func:`normal_state`, :func:`four_ap_state`, :func:`dose_response_gbar`
+* states: :func:`normal_state`, :func:`seizure_state`, :func:`four_ap_state`, :func:`dose_response_gK`
 * simulation: :func:`run_simulation`
 * analysis: :func:`detect_network_bursts`, :func:`burst_statistics`
 * io: :func:`save_network_structure`, :func:`save_recording_data`, loaders

@@ -3,7 +3,8 @@
 Given the pure-NumPy topology produced by :mod:`neuron_simulation.topology`,
 this module instantiates the biophysical network:
 
-* one :class:`neuron_simulation.neurons.Cell` per neuron (HH + A-current),
+* one :class:`neuron_simulation.neurons_ho.Cell` per neuron (Ho et al. 2025
+  intrinsic conductances; the delayed-rectifier ``gK`` is the 4-AP knob),
 * one *point-process synapse per directed edge* so short-term depression and
   the ground-truth wiring stay strictly per-connection,
 * a ``NetCon`` from each presynaptic soma to its target synapse, and
@@ -20,7 +21,7 @@ graph exactly.
 from neuron import h
 import numpy as np
 
-from .neurons import build_cell, load_mechanisms
+from .neurons_ho import build_cell, load_mechanisms
 from .noise import add_poisson_noise
 
 
@@ -28,7 +29,7 @@ class Network:
     """Container for an instantiated NEURON network and its provenance.
 
     Args:
-        cells: List of :class:`neuron_simulation.neurons.Cell` objects, indexed
+        cells: List of :class:`neuron_simulation.neurons_ho.Cell` objects, indexed
             by neuron id.
         synapses: List of point-process synapse objects (one per edge).
         netcons: List of recurrent ``NetCon`` objects (one per edge).
@@ -58,28 +59,28 @@ class Network:
         """Number of recurrent synapses (directed edges)."""
         return len(self.synapses)
 
-    def apply_state(self, gbar_kA_exc, gbar_kA_inh=None):
-        """Set the A-current density on every cell (used to switch states).
+    def apply_state(self, gK_exc, gK_inh=None):
+        """Set the delayed-rectifier density on every cell (the 4-AP knob).
 
         Args:
-            gbar_kA_exc: A-current density (S/cm2) for excitatory cells.
-            gbar_kA_inh: A-current density for inhibitory cells; defaults to
-                ``gbar_kA_exc`` when omitted.
+            gK_exc: Delayed-rectifier density (mS/cm2) for excitatory (PY) cells.
+            gK_inh: Delayed-rectifier density for inhibitory (FS) cells; defaults
+                to ``gK_exc`` when omitted.
 
         Returns:
-            None. Each cell's ``kA.gbar`` is updated in place.
+            None. Each cell's ``ipotassium.g`` is updated in place via ``set_gK``.
         """
-        if gbar_kA_inh is None:
-            gbar_kA_inh = gbar_kA_exc
+        if gK_inh is None:
+            gK_inh = gK_exc
         for cell in self.cells:
-            cell.set_gbar_kA(gbar_kA_inh if cell.is_inhibitory else gbar_kA_exc)
+            cell.set_gK(gK_inh if cell.is_inhibitory else gK_exc)
 
 
 def build_network(
     topology,
     celsius=6.3,
-    gbar_kA_exc=0.006,
-    gbar_kA_inh=0.004,
+    gK_exc=15.0,
+    gK_inh=10.0,
     depression=True,
     depression_d=0.3,
     tau_d=500.0,
@@ -88,7 +89,7 @@ def build_network(
     e_inh=-75.0,
     syn_delay=1.5,
     delay_per_distance=2.0,
-    spike_threshold=0.0,
+    spike_threshold=-15.0,
     exc_weight_scale=2.5,
     inh_weight_scale=5.0,
     noise_rate=18.0,
@@ -113,9 +114,11 @@ def build_network(
         topology: Topology dict from :mod:`neuron_simulation.topology`.
         celsius: Global simulation temperature (degC). 6.3 keeps NEURON's squid
             ``hh`` kinetics; ~34 gives a faster mammalian-like variant.
-        gbar_kA_exc: A-current density (S/cm2) for excitatory cells (the 4-AP
-            knob for the excitatory population).
-        gbar_kA_inh: A-current density (S/cm2) for inhibitory cells.
+        gK_exc: Delayed-rectifier density (mS/cm2) for excitatory (PY) cells --
+            the 4-AP knob for the excitatory population; 15.0 is the drug-free
+            reference, downmodulated toward ~0.3 to drive the 4-AP cascade.
+        gK_inh: Delayed-rectifier density (mS/cm2) for inhibitory (FS) cells
+            (10.0 drug-free reference).
         depression: Whether excitatory synapses use short-term depression. When
             ``False`` the depression fraction is forced to 0 (static synapses).
         depression_d: Per-spike depression fraction for excitatory ``DepSyn``.
@@ -125,7 +128,8 @@ def build_network(
         e_inh: Inhibitory reversal potential (mV).
         syn_delay: Recurrent synaptic delay (ms).
         spike_threshold: Voltage threshold (mV) for spike detection and NetCon
-            event triggering.
+            event triggering. Use ~ -15 mV for the broadened Ho spikes and FS
+            depolarization-block plateaus (a 0 mV crossing misfires on these).
         exc_weight_scale: Multiplier applied to every excitatory NetCon weight
             (a global gain on recurrent excitation; the LIF analogue of
             ``scale_excitatory_weights``).
@@ -166,15 +170,9 @@ def build_network(
         cell = build_cell(
             gid,
             is_inhibitory=inhibitory,
-            gbar_kA=gbar_kA_inh if inhibitory else gbar_kA_exc,
+            gK=gK_inh if inhibitory else gK_exc,
             cluster_id=int(cluster_assignments[gid]),
             spike_threshold=spike_threshold,
-            adapt=adapt,
-            sahp_ainc_fast=sahp_ainc_fast,
-            sahp_tau_fast=sahp_tau_fast,
-            sahp_ainc_slow=sahp_ainc_slow,
-            sahp_tau_slow=sahp_tau_slow,
-            sahp_ek=sahp_ek,
         )
         # Extracellular-K+ clearance rate (the seizure knob). Guarded so this is
         # a no-op if the kdyn mechanism is not inserted (e.g. before the upgrade).
@@ -235,8 +233,8 @@ def build_network(
 
     config = {
         "celsius": float(celsius),
-        "gbar_kA_exc": float(gbar_kA_exc),
-        "gbar_kA_inh": float(gbar_kA_inh),
+        "gK_exc": float(gK_exc),
+        "gK_inh": float(gK_inh),
         "depression": bool(depression),
         "depression_d": effective_d,
         "tau_d": float(tau_d),
@@ -266,6 +264,6 @@ def build_network(
     }
     print(
         f"Built network: {n_neurons} cells, {len(synapses)} synapses, "
-        f"celsius={celsius}, gbar_kA(exc)={gbar_kA_exc}, depression_d={effective_d}"
+        f"celsius={celsius}, gK(exc)={gK_exc}, gK(inh)={gK_inh}, depression_d={effective_d}"
     )
     return Network(cells, synapses, netcons, noise, topology, config)
