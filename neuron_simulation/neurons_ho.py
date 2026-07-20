@@ -14,19 +14,23 @@ WHY THIS SWAP (not just cutting gkbar_hh):
     A-current/gkbar route cannot reproduce it. The FS vs PY difference is
     exactly g_ikCa = 0 (FS) vs 9 (PY).
 
-[K+]o FEEDBACK -- HYBRID CHOICE:
-    We keep your ``kdyn.mod`` as the [K+]o integrator (it READs the summed ik
-    that every Ho K+ current WRITEs, integrates ko, and WRITEs ek). We DROP
-    Ho's ``ikpump`` and ``kbalance``: kdyn's tau_k already lumps pump + glial
-    clearance, and ikpump's ``ko`` is the NEURON ion ko that kdyn does not
-    update. To match Ho's E_K regime, kdyn.ki is raised to ~133 and
-    ko_rest to ~3 here. For a *faithful* reproduction, delete kdyn and
-    rebuild Ho's RxD layer (interstitial shell + glial buffer + ecs diffusion)
-    with NEURON's rxd module in the network builder instead.
+[K+]o FEEDBACK + RESTING PUMP:
+    ``kdyn.mod`` is the DYNAMIC [K+]o integrator (READs the summed ik, integrates
+    its own internal ko, WRITEs the dynamic ek that every Ho K+ current READs) --
+    it carries the seizure [K+]o -> E_K positive feedback. SEPARATELY, Ho's
+    ``ikpump`` + ``kbalance`` are RE-ADDED to restore the electrogenic resting
+    OUTWARD current that keeps cells quiescent at rest; without it these single-
+    compartment cells self-fire and have a knife-edge F-I (no graded low-rate
+    region). ikpump reads the STATIC NEURON-ion ko pinned by kbalance's init
+    (~3 mM) -- used ONLY by the pump, so it does NOT touch kdyn's dynamic ek and
+    there is no conflict. Pump strength is per-population (``ikpumpmax`` PY 20 /
+    FS 30). kdyn.ki ~133 and ko_rest ~3 match Ho's E_K regime. For a *faithful*
+    reproduction, delete kdyn and rebuild Ho's RxD layer instead.
 
 MECHANISMS TO COMPILE (copy from the Ho repo into mechanisms/, then nrnivmodl):
     isodium.mod isodiumP.mod ipotassium.mod ipotassiumM.mod ikCa.mod
-    ikleak.mod ileak.mod   (+ keep your kdyn.mod; keep AmpaNmda/DepSyn/ExpSyn)
+    ikleak.mod ileak.mod iext.mod ikpump.mod kbalance.mod
+    (+ keep your kdyn.mod; keep AmpaNmda/DepSyn/ExpSyn)
     Optional for the "full cascade": GradedSyn.mod (Fig-7 AP-broadening synapse).
 
 INTEGRATION:
@@ -39,6 +43,11 @@ INTEGRATION:
       of gbar_kA and keep setting ``kdyn.tau_k`` as before.
     - Move spike_threshold to ~ -15 mV: broadened spikes + FS depolarization
       block plateaus misbehave at a 0 mV crossing.
+
+NUMERICAL (important): integrate at dt <= 0.025 ms. These mechanisms are
+UNSTABLE at dt = 0.05 (the usual HH value): the membrane voltage diverges
+(|Vm| -> 1e3-1e4 mV) and firing rates / [K+]o become garbage. dt = 0.025 is
+stable and converged; use 0.01 for high-rate or final runs.
 """
 
 import os
@@ -57,6 +66,7 @@ PY_PARAMS = dict(
     g_ikCa=9.0,            # gKCa (Ca2+-activated K+) -- nonzero in PY
     gCa_ikCa=0.1,          # Ca2+ conductance feeding I_KCa
     glcl_ileak=0.15,       # Cl- leak
+    ikpumpmax=20.0,        # Na/K pump strength (electrogenic resting outward bias)
 )
 FS_PARAMS = dict(
     diam=55.0, L=130.0 / 3.14159265,
@@ -67,6 +77,7 @@ FS_PARAMS = dict(
     g_ikCa=0.0,            # gKCa = 0  <-- source of FS depolarization block
     gCa_ikCa=0.03,
     glcl_ileak=0.1,
+    ikpumpmax=30.0,        # stronger pump in FS (kept quiescent at rest)
 )
 
 # kdyn tuning so resting E_K matches Ho's regime (ki=133, ko~3).
@@ -119,7 +130,7 @@ class Cell:
         cluster_id: Cluster index carried for metadata.
     """
 
-    def __init__(self, gid, is_inhibitory=False, gK=None,
+    def __init__(self, gid, is_inhibitory=False, gK=None, iext=0.0, ikpumpmax=None,
                  spike_threshold=-15.0, cluster_id=-1, **legacy_ignored):
         self.gid = int(gid)
         self.is_inhibitory = bool(is_inhibitory)
@@ -135,7 +146,8 @@ class Cell:
 
         # --- Ho intrinsic currents ---
         for mech in ("ileak", "ikleak", "isodium", "isodiumP",
-                     "ipotassium", "ipotassiumM", "ikCa"):
+                     "ipotassium", "ipotassiumM", "ikCa", "iext",
+                     "kbalance", "ikpump"):
             self.soma.insert(mech)
         seg = self.soma(0.5)
         seg.isodium.g = params["g_isodium"]
@@ -146,7 +158,20 @@ class Cell:
         seg.ikCa.gCa = params["gCa_ikCa"]
         seg.ileak.glcl = params["glcl_ileak"]
         # ikleak.g defaults to gL|K = 0.035 in the .mod (Ho Table 1); leave as-is.
+        seg.iext.iext = float(iext)   # external DC bias current (uA/cm2); 0 = off
         self.gK = float(seg.ipotassium.g)
+        self.iext = float(seg.iext.iext)
+
+        # --- Na/K pump: electrogenic resting OUTWARD bias that restores Ho's
+        #     quiescent resting point (without it these single-compartment cells
+        #     self-fire and have a knife-edge F-I). ikpump reads a STATIC ion ko
+        #     pinned by kbalance's init (~3 mM), used ONLY by the pump -- it does
+        #     NOT touch kdyn's dynamic ek, so there is no conflict. Per-population.
+        seg.kbalance.ko_init = KDYN_KO_REST
+        seg.kbalance.ki_init = KDYN_KI
+        seg.ikpump.koeq = KDYN_KO_REST
+        seg.ikpump.ikpumpmax = params["ikpumpmax"] if ikpumpmax is None else float(ikpumpmax)
+        self.ikpumpmax = float(seg.ikpump.ikpumpmax)
 
         # --- [K+]o feedback (hybrid): kdyn integrates the summed ik -> ek ---
         # Drop ikpump/kbalance; kdyn.tau_k lumps pump+glia clearance.
@@ -170,6 +195,11 @@ class Cell:
         self.gK = float(gK)
         self.soma(0.5).ipotassium.g = self.gK
 
+    def set_iext(self, iext):
+        """Set the external DC bias current (uA/cm2) on the soma (operating point)."""
+        self.iext = float(iext)
+        self.soma(0.5).iext.iext = self.iext
+
     # Back-compat shim so old callers that reach for set_gbar_kA still drive the knob.
     def set_gbar_kA(self, value):  # noqa: D401 (deprecated alias)
         self.set_gK(value)
@@ -178,10 +208,10 @@ class Cell:
         return list(self.spike_times)
 
 
-def build_cell(gid, is_inhibitory=False, gK=None, cluster_id=-1,
+def build_cell(gid, is_inhibitory=False, gK=None, iext=0.0, ikpumpmax=None, cluster_id=-1,
                spike_threshold=-15.0, **legacy_ignored):
     """Thin wrapper over :class:`Cell` (legacy gbar_kA/adapt/sahp kwargs ignored)."""
-    return Cell(gid, is_inhibitory=is_inhibitory, gK=gK,
+    return Cell(gid, is_inhibitory=is_inhibitory, gK=gK, iext=iext, ikpumpmax=ikpumpmax,
                 cluster_id=cluster_id, spike_threshold=spike_threshold)
 
 
