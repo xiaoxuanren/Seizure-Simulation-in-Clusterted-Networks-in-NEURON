@@ -84,7 +84,7 @@ def plot_raster(
             continue
         y = np.full(s.shape, row_of[nid])
         color = _INH_COLOR if is_inhibitory[nid] else _EXC_COLOR
-        ax_r.scatter(s, y, s=4.0, c=color, marker=".", linewidths=0.0)
+        ax_r.scatter(s, y, s=20.0, c=color, marker=".", linewidths=0.0)
     ax_r.set_ylabel("neuron (randomized)" if randomize_rows else "neuron (cluster-sorted)")
     ax_r.set_title(title)
     ax_r.set_ylim(-1, n_neurons)
@@ -348,7 +348,7 @@ def plot_raster_with_ko(
             continue
         y = np.full(s.shape, row_of[nid])
         color = _INH_COLOR if is_inhibitory[nid] else _EXC_COLOR
-        ax_r.scatter(s, y, s=4.0, c=color, marker=".", linewidths=0.0)
+        ax_r.scatter(s, y, s=20.0, c=color, marker=".", linewidths=0.0)
     ax_r.set_ylabel("neuron (randomized)" if randomize_rows else "neuron (cluster-sorted)")
     ax_r.set_title(title)
     ax_r.set_ylim(-1, n_neurons)
