@@ -20,6 +20,7 @@ graph exactly.
 from neuron import h
 import numpy as np
 
+from . import parameters as _params
 from .neurons import build_cell, load_mechanisms
 from .noise import add_poisson_noise
 
@@ -81,7 +82,7 @@ def build_network(
     gbar_kA_exc=0.006,
     gbar_kA_inh=0.004,
     depression=True,
-    depression_d=0.3,
+    depression_d=0.2,
     tau_d=500.0,
     exc_tau=5.0,
     inh_tau=6.0,
@@ -89,23 +90,24 @@ def build_network(
     syn_delay=1.5,
     delay_per_distance=2.0,
     spike_threshold=0.0,
-    exc_weight_scale=2.5,
-    inh_weight_scale=5.0,
-    noise_rate=18.0,
-    noise_weight=0.0025,
+    exc_weight_scale=2.0,
+    inh_weight_scale=2.5,
+    noise_rate=5.0,
+    noise_weight=0.004,
     noise_tau=3.0,
     noise_seed=1000,
     tau_k=200.0,
     synapse_model="ampa_nmda",
-    tau_nmda=150.0,
-    nmda_ratio=2.5,
+    tau_nmda=350.0,
+    nmda_ratio=3.0,
     adapt=True,
-    sahp_ainc_fast=0.009,
+    sahp_ainc_fast=0.005,
     sahp_tau_fast=300.0,
-    sahp_ainc_slow=0.0045,
-    sahp_tau_slow=4000.0,
+    sahp_ainc_slow=0.01,
+    sahp_tau_slow=6500.0,
     sahp_ek=-90.0,
     kA_globals=None,
+    report_deviations=True,
 ):
     """Instantiate a NEURON network from a topology dict.
 
@@ -268,4 +270,10 @@ def build_network(
         f"Built network: {n_neurons} cells, {len(synapses)} synapses, "
         f"celsius={celsius}, gbar_kA(exc)={gbar_kA_exc}, depression_d={effective_d}"
     )
+    if report_deviations:
+        # Informational only: says how this run differs from the canonical
+        # operating point. Non-default settings are expected during exploration.
+        note = _params.format_deviations(config)
+        if note:
+            print(note)
     return Network(cells, synapses, netcons, noise, topology, config)

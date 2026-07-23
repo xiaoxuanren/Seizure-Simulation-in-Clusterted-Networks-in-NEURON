@@ -149,11 +149,11 @@ def run_one_recording(cfg, rec_idx):
 # Orchestrator
 # --------------------------------------------------------------------------- #
 def generate_dataset_parallel(
-    n_recordings=15, recording_duration=60000.0, topology_kind="lognormal",
+    n_recordings=50, recording_duration=60000.0, topology_kind="lognormal",
     topology_kwargs=None, build_kwargs=None, state=None, dt=0.05,
     discard_transient_ms=1000.0, record_voltage=False, voltage_dt=1.0,
     voltage_storage_backend="inline_npz", target_freq=10, save_dir="NEURON data",
-    participation_threshold=0.8, noise_seed_base=1000, topology_seed=0,
+    participation_threshold=0.35, noise_seed_base=1000, topology_seed=0,
     max_workers=None, per_worker_gb=0.6, headroom_gb=4.0, save_rasters=True,
     timestamp=None, poll_s=1.0,
 ):
@@ -166,6 +166,7 @@ def generate_dataset_parallel(
     from neuron_simulation.topology import build_topology_lognormal, build_topology
     from neuron_simulation.io import save_network_structure
     from neuron_simulation.network_builder import build_network
+    from neuron_simulation import parameters as _params
     from neuron_simulation import states as states_module
 
     topology_kwargs = dict(topology_kwargs or {})
@@ -262,6 +263,19 @@ def generate_dataset_parallel(
         topology_kind=topology_kind, density=float(cluster_info.get("density", 0.0)),
         target_freq=target_freq, dt=dt, discard_transient_ms=discard_transient_ms,
         record_voltage=record_voltage, state=state, network_file=network_file,
+        build_kwargs={k: v for k, v in build_kwargs.items()},
+        parameters=_params.document(
+            {**topology_kwargs, **build_kwargs, "dt": dt,
+             "recording_duration": recording_duration, "n_recordings": n_recordings,
+             "discard_transient_ms": discard_transient_ms,
+             "participation_threshold": participation_threshold,
+             "record_voltage": record_voltage, "target_freq": target_freq}),
+        deviations_from_default={
+            k: {"value": v, "default": d}
+            for k, (v, d) in _params.deviations(
+                {**topology_kwargs, **build_kwargs, "dt": dt,
+                 "recording_duration": recording_duration,
+                 "n_recordings": n_recordings}).items()},
         mode="spontaneous_bursting", background_input=True,
         participation_threshold=participation_threshold, parallel=True, n_workers=workers,
         recordings=[results[i] for i in sorted(results)])

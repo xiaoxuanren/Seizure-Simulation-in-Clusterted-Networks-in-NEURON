@@ -23,7 +23,7 @@ from neuron import h
 def run_simulation(
     network,
     duration=60000.0,
-    dt=0.025,
+    dt=0.05,
     v_init=-65.0,
     discard_transient_ms=1000.0,
     record_voltage=False,
