@@ -344,26 +344,26 @@ def _finalize_topology(
 # Builder 1 (PREFERRED): clustered + distance + continuous log-normal propensity
 # --------------------------------------------------------------------------- #
 def build_topology_lognormal(
-    num_clusters=20,
+    num_clusters=50,
     neurons_per_cluster_range=(4, 40),
     inhibitory_probability=0.2,
     cluster_radius=1.0,
     space_size=15.0,
-    within_cluster_prob=0.2,
-    between_cluster_prob=0.15,
-    max_connection_distance=8.0,
+    within_cluster_prob=0.25,
+    between_cluster_prob=0.06,
+    max_connection_distance=6.0,
     decay_sigma=3.0,
-    ln_sigma=1.0,
+    ln_sigma=0.5,
     target_density=None,
     weight_params=None,
-    cell_type_specific=False,
-    p_ee_within=0.15,
-    p_ee_between=0.02,
-    p_ei_within=0.30,
-    p_ei_between=0.01,
-    p_ie_within=0.70,
+    cell_type_specific=True,
+    p_ee_within=0.2,
+    p_ee_between=0.1,
+    p_ei_within=0.2,
+    p_ei_between=0.08,
+    p_ie_within=0.4,
     p_ii_within=0.50,
-    seed=0,
+    seed=1,
 ):
     """Build the preferred clustered + log-normal-propensity topology.
 

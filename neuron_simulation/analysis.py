@@ -3,9 +3,13 @@
 This is the biophysical analogue of the LIF project's analysis helpers, but the
 burst definition is stricter and matches the project requirement:
 
-    A **network burst** is an event window during which **> 80% of neurons
-    fire** (measured post burn-in). This is NOT the same as "the peak active
-    fraction in a 10 ms bin exceeds 80%": a burst can spread its participants
+    A **network burst** is an event window during which more than
+    ``participation_threshold`` of neurons fire (measured post burn-in). The
+    project default is **0.35** -- the "loose burst" definition: these events are
+    genuinely low-participation, so a >80% detector misses them entirely. Pass
+    ``participation_threshold=0.8`` for the strict, near-whole-network events.
+    This is NOT the same as "the peak active fraction in a 10 ms bin exceeds the
+    threshold": a burst can spread its participants
     across tens of milliseconds, so participation is counted over the whole
     event window, not within a single narrow bin.
 
@@ -61,7 +65,7 @@ def detect_network_bursts(
     spike_data,
     n_neurons,
     duration_ms,
-    participation_threshold=0.8,
+    participation_threshold=0.35,
     burn_in_ms=1000.0,
     activity_bin_ms=5.0,
     onset_active_frac=0.05,
@@ -77,7 +81,7 @@ def detect_network_bursts(
         duration_ms: Recording duration in milliseconds.
         participation_threshold: Fraction of *distinct* neurons that must be
             strictly exceeded within an event window for it to count as a network
-            burst (default 0.8 ⇒ a burst needs > 80% participation).
+            burst (default 0.35 ⇒ a loose burst needs > 35% participation).
         burn_in_ms: Startup transient (ms) excluded before detection.
         activity_bin_ms: Bin width (ms) for the coarse population-activity signal
             used to bracket candidate events.
@@ -146,7 +150,7 @@ def detect_network_bursts(
                 participants += 1
         participation = participants / max(1, n_neurons)
         # Spec: a network burst requires strictly MORE than the threshold
-        # fraction of neurons (> 80% by default), not >=.
+        # fraction of neurons (> 35% by default), not >=.
         if participation > participation_threshold:
             # Peak time = center of mass of population activity in the window.
             in_win = [(s[(s >= w0) & (s < w1)]) for s in spike_arrays]

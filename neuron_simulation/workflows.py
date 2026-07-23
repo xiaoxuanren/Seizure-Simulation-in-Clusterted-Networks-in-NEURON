@@ -15,6 +15,7 @@ import json
 import os
 from datetime import datetime
 
+from . import parameters as _params
 from . import states as states_module
 from .analysis import burst_statistics, detect_network_bursts
 from .io import save_network_structure, save_recording_data
@@ -64,9 +65,12 @@ def run_single_state(
     state_name = "custom"
     if state is not None:
         state_name = state.get("state_name", "custom")
-        for key in ("gbar_kA_exc", "gbar_kA_inh", "tau_k", "sahp_ainc_slow", "sahp_ainc_fast"):
+        # State values are DEFAULTS: an explicitly-passed build_kwargs entry wins.
+        # (Previously this overrode build_kwargs, which would silently clobber an
+        # explicit single-knob sahp_ainc_slow with the state's own value.)
+        for key in states_module.STATE_BUILD_KEYS:
             if key in state:
-                build_kwargs[key] = state[key]
+                build_kwargs.setdefault(key, state[key])
 
     network = build_network(topology, **build_kwargs)
     spike_data, voltage_data, ko_data = run_simulation(
@@ -122,20 +126,20 @@ def _bursts_to_windows(bursts, duration_ms):
 
 
 def generate_dataset(
-    n_recordings=5,
-    recording_duration=30000.0,
+    n_recordings=50,
+    recording_duration=60000.0,
     topology_kind="lognormal",
     topology_kwargs=None,
     build_kwargs=None,
     state=None,
-    dt=0.025,
+    dt=0.05,
     discard_transient_ms=1000.0,
     record_voltage=False,
     voltage_dt=1.0,
     voltage_storage_backend="inline_npz",
     target_freq=10,
     save_dir="NEURON data",
-    participation_threshold=0.8,
+    participation_threshold=0.35,
     noise_seed_base=1000,
     topology_seed=0,
 ):
@@ -176,7 +180,9 @@ def generate_dataset(
     build_kwargs = dict(build_kwargs or {})
     if state is None:
         state = states_module.normal_state()
-    for key in ("gbar_kA_exc", "gbar_kA_inh", "tau_k"):
+    # Merge ALL state keys (this previously dropped sahp_ainc_slow/_fast, so a
+    # seizure_state() passed here silently generated a NORMAL dataset).
+    for key in states_module.STATE_BUILD_KEYS:
         if key in state:
             build_kwargs.setdefault(key, state[key])
 
@@ -225,6 +231,24 @@ def generate_dataset(
         "voltage_sample_rate": voltage_dt if record_voltage else None,
         "voltage_storage_backend": voltage_storage_backend if record_voltage else None,
         "state": state,
+        # Provenance: the RESOLVED build parameters actually used. Without this the
+        # single knob (sahp_ainc_slow) is not recorded anywhere in a saved session.
+        "build_kwargs": {k: v for k, v in build_kwargs.items()},
+        # Self-describing provenance: every resolved parameter with its units,
+        # meaning, and effect of increasing (from neuron_simulation/parameters.py).
+        "parameters": _params.document(
+            {**topology_kwargs, **build_kwargs, "dt": dt,
+             "recording_duration": recording_duration, "n_recordings": n_recordings,
+             "discard_transient_ms": discard_transient_ms,
+             "participation_threshold": participation_threshold,
+             "record_voltage": record_voltage, "target_freq": target_freq}),
+        # How this session differs from the canonical operating point.
+        "deviations_from_default": {
+            k: {"value": v, "default": d}
+            for k, (v, d) in _params.deviations(
+                {**topology_kwargs, **build_kwargs, "dt": dt,
+                 "recording_duration": recording_duration,
+                 "n_recordings": n_recordings}).items()},
         "build_config": network.config,
         "network_file": network_file,
         "mode": "spontaneous_bursting",
