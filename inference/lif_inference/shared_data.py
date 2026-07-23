@@ -18,11 +18,22 @@ def spike_times_to_binary(spike_times, duration_ms, dt=1.0):
         dt: Target bin width in milliseconds.
 
     Returns:
-        A binary matrix with shape ``[n_neurons, T]`` sampled at ``dt`` resolution.
+        A binary matrix with shape ``[n_neurons, T]`` sampled at ``dt``
+        resolution, stored as ``uint8``.
+
+    Note:
+        Values are strictly ``{0, 1}`` (repeat spikes in a bin collapse to 1), so
+        ``uint8`` is exact and uses 1 byte per bin instead of float32's 4 -- a 4x
+        memory reduction on the concatenated matrix (e.g. 7.1 GB -> 1.8 GB for
+        926 neurons x 1.92M bins). Consumers that need floats cast on read
+        (``.astype(np.float32)`` in the dataset ``__getitem__``); ``.sum()`` and
+        ``.mean()`` promote automatically and stay exact. Do NOT use this matrix
+        directly in ``np.dot``/``@``, which preserves ``uint8`` and would
+        overflow -- cast to float first.
     """
     n_neurons = len(spike_times)
     n_bins = int(duration_ms / dt)
-    binary = np.zeros((n_neurons, n_bins), dtype=np.float32)
+    binary = np.zeros((n_neurons, n_bins), dtype=np.uint8)
     for i in range(n_neurons):
         for t in spike_times[i]:
             idx = int(t / dt)
