@@ -473,8 +473,8 @@ class NeuronDataset(Dataset):
         post_id = self.neuron_ids[idx]
         pre_ids = self.neighbor_indices[post_id]
 
-        pre_spikes = self.spike_matrix[pre_ids]             # [K, T]
-        post_spikes = self.spike_matrix[post_id]             # [T]
+        pre_spikes = self.spike_matrix[pre_ids].astype(np.float32)    # [K, T]
+        post_spikes = self.spike_matrix[post_id].astype(np.float32)   # [T]
         labels = self.true_binary[post_id, pre_ids].astype(np.float32)
         weights = self.true_weights[post_id, pre_ids].astype(np.float32)
 
@@ -1269,7 +1269,8 @@ def run_pipeline(session_dir, K=100, recording_idx=0, n_epochs=100, lr=1e-3,
                  burst_min_duration_ms=100.0,
                  burst_merge_gap_ms=150.0,
                  burst_pad_before_ms=100.0,
-                 burst_pad_after_ms=250.0):
+                 burst_pad_after_ms=250.0,
+                 num_workers=0, checkpoint_dir=None, select_by='val_loss'):
     """Train the spike-only learned-LIF connectivity model and export artifacts.
 
     Args:
@@ -1487,10 +1488,13 @@ def run_pipeline(session_dir, K=100, recording_idx=0, n_epochs=100, lr=1e-3,
                            "parameters fit the recording length.")
 
     # Window batches can mix neurons, but each sample still points back to its own learned weight row.
+    _pin = torch.cuda.is_available()
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
-                              num_workers=0)
+                              num_workers=num_workers,
+                              persistent_workers=num_workers > 0, pin_memory=_pin)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
-                            num_workers=0)
+                            num_workers=num_workers,
+                            persistent_workers=num_workers > 0, pin_memory=_pin)
 
     # Model
     model = PerNeuronLIF(
@@ -1512,6 +1516,8 @@ def run_pipeline(session_dir, K=100, recording_idx=0, n_epochs=100, lr=1e-3,
     # Train
     print(f"\n  Training with event windows...")
     best_val_loss = float('inf')
+    best_conn_auc = -float('inf')
+    best_epoch = -1
     best_state = None
     epochs_no_improve = 0
     train_losses = []
@@ -1519,7 +1525,28 @@ def run_pipeline(session_dir, K=100, recording_idx=0, n_epochs=100, lr=1e-3,
     conn_aucs = []
     t0 = time.time()
 
-    for epoch in range(n_epochs):
+    start_epoch = 0
+    ckpt_path = None
+    if checkpoint_dir:
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        ckpt_path = os.path.join(checkpoint_dir, 'lif_train_checkpoint.pt')
+        if os.path.exists(ckpt_path):
+            _ck = torch.load(ckpt_path, map_location=device)
+            model.load_state_dict(_ck['model_state_dict'])
+            optimizer.load_state_dict(_ck['optimizer_state_dict'])
+            scheduler.load_state_dict(_ck['scheduler_state_dict'])
+            best_val_loss = _ck['best_val_loss']
+            best_conn_auc = _ck.get('best_conn_auc', -float('inf'))
+            best_state = _ck['best_state']
+            epochs_no_improve = _ck['epochs_no_improve']
+            train_losses = _ck['train_losses']
+            val_losses = _ck['val_losses']
+            conn_aucs = _ck['conn_aucs']
+            start_epoch = _ck['epoch'] + 1
+            print(f"  [checkpoint] resumed from epoch {start_epoch} "
+                  f"(best_val_loss={best_val_loss:.4f})", flush=True)
+
+    for epoch in range(start_epoch, n_epochs):
         loss, sl, l1l = train_epoch_events(
             model, train_loader, optimizer, device,
             pos_weight, l1_lambda, warmup,
@@ -1539,12 +1566,37 @@ def run_pipeline(session_dir, K=100, recording_idx=0, n_epochs=100, lr=1e-3,
         conn_aucs.append(conn_auc)
         scheduler.step(val_loss)
 
+        if select_by == 'conn_auc':
+            improved = conn_auc > best_conn_auc
+        else:
+            improved = val_loss < best_val_loss
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+        if conn_auc > best_conn_auc:
+            best_conn_auc = conn_auc
+        if improved:
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
+            best_epoch = epoch
             epochs_no_improve = 0
         else:
             epochs_no_improve += 1
+
+        if ckpt_path:
+            _tmp = ckpt_path + '.tmp'
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'best_val_loss': best_val_loss,
+                'best_conn_auc': best_conn_auc,
+                'best_state': best_state,
+                'epochs_no_improve': epochs_no_improve,
+                'train_losses': train_losses,
+                'val_losses': val_losses,
+                'conn_aucs': conn_aucs,
+            }, _tmp)
+            os.replace(_tmp, ckpt_path)
 
         if (epoch + 1) % 5 == 0 or epoch == 0:
             alpha = torch.sigmoid(model.alpha_logit).item()
@@ -1563,7 +1615,8 @@ def run_pipeline(session_dir, K=100, recording_idx=0, n_epochs=100, lr=1e-3,
 
     if best_state:
         model.load_state_dict(best_state)
-    print(f"  Done in {time.time()-t0:.0f}s, best val loss={best_val_loss:.4f}")
+    print(f"  Done in {time.time()-t0:.0f}s, best val loss={best_val_loss:.4f}, "
+          f"best conn_AUC={best_conn_auc:.4f} (restored epoch {best_epoch+1} by {select_by})")
 
     # Final held-out window eval
     val_window_results = evaluate_event_windows(

@@ -1,0 +1,30 @@
+﻿torch 2.5.1+cu121 cuda_available=True threads=16
+GPU: NVIDIA GeForce RTX 3060 Ti
+[bench] building dataset from NEURON data/20260704_133726 ...
+  loaded N=148 recs=2 spike_matrix=(148, 24000) dtype=uint8
+[bench] dataset ready: N=148 K=100 windows=33742 (build 11.2s)
+
+[bench] timing device=cpu num_workers=0 ...
+  win=(64, 100, 90) load=1.1ms/batch step=19.1ms/batch (compute~18.0ms) => 52 batches/s
+
+[bench] timing device=cuda num_workers=0 ...
+  win=(64, 100, 90) load=1.2ms/batch step=49.1ms/batch (compute~47.9ms) => 20 batches/s
+
+[bench] timing device=cuda num_workers=4 ...
+  win=(64, 100, 90) load=2.4ms/batch step=55.1ms/batch (compute~52.7ms) => 18 batches/s
+
+[bench] timing device=cuda num_workers=8 ...
+  win=(64, 100, 90) load=1.1ms/batch step=51.5ms/batch (compute~50.4ms) => 19 batches/s
+
+==================== SUMMARY (ms per batch) ====================
+config                  load      step   compute   batches/s
+cpu/nw=0                 1.1      19.1      18.0          52
+cuda/nw=0                1.2      49.1      47.9          20
+cuda/nw=4                2.4      55.1      52.7          18
+cuda/nw=8                1.1      51.5      50.4          19
+
+speedup vs cpu/nw=0 (by step_ms):
+  cpu/nw=0  : 1.00x
+  cuda/nw=0  : 0.39x
+  cuda/nw=4  : 0.35x
+  cuda/nw=8  : 0.37x
