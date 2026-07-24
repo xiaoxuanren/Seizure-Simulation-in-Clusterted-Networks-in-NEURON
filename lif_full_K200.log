@@ -1,0 +1,76 @@
+[LIF-full] session=notebooks/NEURON data parallel/normal/20260721_163430
+[LIF-full] device=cpu workers=4 epochs=15 K=200 max_delay=5 batch=256 exclude_bursts=true
+[LIF-full] checkpoints -> notebooks/NEURON data parallel/normal/20260721_163430/lif_checkpoints_K200
+
+======================================================================
+LEARNED LIF CONNECTIVITY (Event Windows + Per-Neuron Weights)
+Session: 20260721_163430
+Output tag: K200
+K=200, epochs=15, lr=0.001, max_delay=5, l1=0.01
+Window: warmup=30, pre=50, post=10 (90 bins)
+Event anchor mode: post
+Threshold mode: adaptive
+Connectivity thresholding: surrogate_fdr
+Device: cpu
+======================================================================
+
+  Loading data...
+  Loaded 50 recordings, total duration: 3000s
+  Neurons: 926, Connections: 13356
+  Spike matrix: [926, 3000000] (775179 total spikes)
+  Recording boundaries: [0, 60000, 120000, 180000, 240000, 300000, 360000, 420000, 480000, 540000, 600000, 660000, 720000, 780000, 840000, 900000, 960000, 1020000, 1080000, 1140000, 1200000, 1260000, 1320000, 1380000, 1440000, 1500000, 1560000, 1620000, 1680000, 1740000, 1800000, 1860000, 1920000, 1980000, 2040000, 2100000, 2160000, 2220000, 2280000, 2340000, 2400000, 2460000, 2520000, 2580000, 2640000, 2700000, 2760000, 2820000, 2880000, 2940000, 3000000]
+  Detected burst windows: 251
+  Detected excluded bins: 156650
+  Mean burst threshold: 0.142 active fraction per 100 ms bin
+  Total excluded bins: 156650
+  Candidate mode: hybrid
+  Candidate mix: 160 spatial + 40 temporal (lag 1-5 bins)
+  Temporal candidate scoring excludes configured excluded bins
+  Mean temporal-only candidates per neuron: 31.6
+  K=200, coverage: 11426/13356 (85.5%)
+
+  Extracting event windows...
+  Validation strategy: held-out recordings (40 train, 10 val), excluding 156650 bins
+  Train windows: 882508 (441254 pos, 441254 neg)
+  Val windows:   228070 (114035 pos, 114035 neg)
+  Parameters: 1,113,056 (W: 185,200, delays: 926,000, membrane+threshold: 1,856)
+
+  Training with event windows...
+    Epoch   1: loss=0.1824 (spike=0.1821 l1=0.0002) val_loss=0.1717 conn_AUC=0.7216 alpha=0.898 theta_mode=adaptive theta0=0.538 eta=0.607 rho=0.656 (198s)
+    Epoch   5: loss=0.1631 (spike=0.1627 l1=0.0004) val_loss=0.1661 conn_AUC=0.8804 alpha=0.966 theta_mode=adaptive theta0=0.416 eta=0.665 rho=0.234 (916s)
+    Epoch  10: loss=0.1612 (spike=0.1608 l1=0.0004) val_loss=0.1647 conn_AUC=0.8594 alpha=0.998 theta_mode=adaptive theta0=0.357 eta=0.679 rho=0.824 (1818s)
+    Epoch  15: loss=0.1610 (spike=0.1606 l1=0.0004) val_loss=0.1647 conn_AUC=0.8483 alpha=0.999 theta_mode=adaptive theta0=0.324 eta=0.666 rho=0.848 (2718s)
+  Done in 2718s, best val loss=0.1646, best conn_AUC=0.8804 (restored epoch 5 by conn_auc)
+
+  Calibrating non-leaky connectivity threshold with 4 circular-shift surrogates (target FDR=0.005) for surrogate-threshold output...
+  Surrogate score sets: 4 models x 185200 edges
+
+  ==================================================
+  HELD-OUT WINDOW VALIDATION
+  ==================================================
+  Strategy:   held-out recordings (40 train, 10 val), excluding 156650 bins
+  Loss:       0.1661
+  Spike loss: 0.1657
+  L1 loss:    0.0004
+  Windows:    228070
+
+  CONNECTIVITY RESULTS (all fitted neurons)
+  AUC:       0.8804
+  AP:        0.6689
+  F1:        0.3408
+  Threshold rule: surrogate_fdr
+  Estimated FDR: 0.0050 (target 0.0050)
+  Oracle figure threshold: 0.1044
+  Surrogate figure threshold: 0.0511
+
+  Learned: alpha=0.9662 (tau_m~29.0ms), threshold_mode=adaptive, threshold_base=0.4157, threshold_inc=0.6652, threshold_decay=0.2336, beta=7.9461
+  Visualization saved: D:\HAI Lab\2026\NEURON model\07 July 2026\inference\learned_lif_outputs\learned_lif_20260721_163430_K200_surrogate_fdr.png
+  Visualization saved: D:\HAI Lab\2026\NEURON model\07 July 2026\inference\learned_lif_outputs\learned_lif_20260721_163430_K200_oracle_f1.png
+  Model + connectivity saved: D:\HAI Lab\2026\NEURON model\07 July 2026\inference\learned_lif_outputs\learned_lif_20260721_163430_K200.pt
+  Connectivity matrix saved: D:\HAI Lab\2026\NEURON model\07 July 2026\inference\learned_lif_outputs\connectivity_20260721_163430_K200.npz
+
+[LIF-full] DONE 2.03h | AUC=0.8804 AP=0.6689 | 11426 true / 185200 candidate edges
+[LIF-full] oracle_f1      TP=6095 FP=1701 FN=5331 (P=0.7818 R=0.5334 F1=0.6342)
+[LIF-full] surrogate_fdr  TP=9199 FP=33366 FN=2227 (P=0.2161 R=0.8051 F1=0.3408 estFDR=0.004998237988958064)
+[LIF-full] low_fp(P>=0.9) TP=5177 FP=575 FN=6249 (P=0.9 R=0.4531 F1=0.6027)
+[LIF-full] results -> notebooks/NEURON data parallel/normal/20260721_163430/learned_lif_full_results_K200.json
