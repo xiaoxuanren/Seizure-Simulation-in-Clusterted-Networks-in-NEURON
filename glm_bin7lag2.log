@@ -1,0 +1,13 @@
+﻿[GLM] 50 recordings | spike matrix [926 x 428550] (3000s of data) | load 2.6s
+[GLM] joint lag fit (max_lag=2, l2=2.0) in 483.0s
+
+[GLM] per-lag ranking | candidates=856550  true exc=11684  inh=1672
+  lag   window     exc_AUC  exc_AP   inh_AUC  inh_AP
+  1      0- 7ms    0.899    0.646    0.901    0.222
+  2      7-14ms    0.869    0.493    0.675    0.006
+
+[GLM] BEST lag by excitatory AUC = lag 1 (0-7ms): exc_AUC=0.899 exc_AP=0.646 | inh_AUC=0.901 inh_AP=0.222
+[GLM] sweep saved -> notebooks/NEURON data parallel/normal/20260721_163430_spikeonly\glm_lag_sweep.json
+
+[GLM] label-free predicted edges via glm.run (readout=peak, all recordings)...
+[GLM] peak @FDR0.10: 7427 exc + 15 inh edges -> TP=6889 FP=553 FN=6467 (P=0.93 R=0.52 F1=0.66); neuron-type AUC=0.828
