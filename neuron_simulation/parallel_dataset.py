@@ -121,14 +121,20 @@ def run_one_recording(cfg, rec_idx):
             import matplotlib.pyplot as plt
             from neuron_simulation import plotting
             session_dir = os.path.join(cfg["save_dir"], cfg["timestamp"])
+            # Title carries the single knob (sahp_ainc_slow) so normal vs seizure
+            # runs are distinguishable: both use state_name "normal" (same K+
+            # buffering) and differ ONLY by this adaptation strength.
+            _sahp = cfg["build_kwargs"].get("sahp_ainc_slow")
+            _knob = "" if _sahp is None else "  (sahp_ainc_slow=%.3f)" % _sahp
             for shuffled, suffix in ((False, "raster"), (True, "raster_shuffled")):
                 fig = plotting.plot_raster(
                     spike_data, network.n_neurons, cfg["recording_duration"],
                     is_inhibitory=topology.get("neuron_is_inhibitory"),
                     cluster_assignments=topology["cluster_assignments"], burn_in_ms=0.0,
-                    title="recording %03d - %s%s" % (rec_idx, cfg["state_name"],
-                                                     " (randomized rows)" if shuffled else ""),
-                    randomize_rows=shuffled)
+                    title="recording %03d - %s%s%s" % (rec_idx, cfg["state_name"], _knob,
+                                                       " (randomized rows)" if shuffled else ""),
+                    randomize_rows=shuffled, dot_size=cfg.get("raster_dot_size", 20.0),
+                    show_burst_count=cfg.get("raster_show_burst_count", True))
                 fn = os.path.join(session_dir, "recording%03d_%s.png" % (rec_idx, suffix))
                 fig.savefig(fn, dpi=120, facecolor="white", bbox_inches="tight"); plt.close(fig)
                 if shuffled:
@@ -155,7 +161,7 @@ def generate_dataset_parallel(
     voltage_storage_backend="inline_npz", target_freq=10, save_dir="NEURON data",
     participation_threshold=0.8, noise_seed_base=1000, topology_seed=0,
     max_workers=None, per_worker_gb=0.6, headroom_gb=4.0, save_rasters=True,
-    timestamp=None, poll_s=1.0,
+    raster_dot_size=20.0, raster_show_burst_count=True, timestamp=None, poll_s=1.0,
 ):
     """Parallel drop-in for :func:`workflows.generate_dataset`.
 
@@ -203,7 +209,8 @@ def generate_dataset_parallel(
         voltage_dt=voltage_dt, voltage_storage_backend=voltage_storage_backend,
         target_freq=target_freq, participation_threshold=participation_threshold,
         noise_seed_base=noise_seed_base, timestamp=timestamp, save_dir=save_dir,
-        save_rasters=save_rasters)
+        save_rasters=save_rasters, raster_dot_size=raster_dot_size,
+        raster_show_burst_count=raster_show_burst_count)
     cfg_path = os.path.join(session_dir, "_worker_config.pkl")
     with open(cfg_path, "wb") as f:
         pickle.dump(cfg, f)
