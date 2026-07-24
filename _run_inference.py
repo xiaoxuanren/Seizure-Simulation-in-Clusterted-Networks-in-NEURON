@@ -2,7 +2,7 @@
 
 Usage:
     python _run_inference.py env
-    python _run_inference.py glm  [--max-lag 6] [--bin-ms 5] [--edges]
+    python _run_inference.py glm  [--readout peak|lag1|sum] [--max-lag 6] [--bin-ms 5] [--edges]
     python _run_inference.py lif  [--burst both|on|off] [--epochs 30] [--K 100] [--max-delay 5]
 
 - Uses ALL recordings in the session (no cap).
@@ -170,12 +170,14 @@ def cmd_glm(args):
     print("[GLM] sweep saved -> %s" % out)
 
     if args.edges:
-        print("\n[GLM] label-free predicted edges via glm.run (readout=lag1, all recordings)...")
+        print("\n[GLM] label-free predicted edges via glm.run (readout=%s, all recordings)..."
+              % args.readout)
         res, m = glm.run(args.session, bin_ms=args.bin_ms, max_lag=args.max_lag,
-                         l2=args.l2, readout="lag1", save=True)
+                         l2=args.l2, readout=args.readout, save=True)
         ca = m["confusion_all_edges"]
-        print("[GLM] lag1 @FDR%.2f: %d exc + %d inh edges -> TP=%d FP=%d FN=%d "
+        print("[GLM] %s @FDR%.2f: %d exc + %d inh edges -> TP=%d FP=%d FN=%d "
               "(P=%.2f R=%.2f F1=%.2f); neuron-type AUC=%.3f" % (
+                  args.readout,
                   res["target_fdr"], res["n_pred_exc"], res["n_pred_inh"],
                   ca["TP"], ca["FP"], ca["FN"], ca["precision"], ca["recall"], ca["f1"],
                   m.get("auc_neuron_type", float("nan"))))
@@ -243,6 +245,9 @@ def main():
     pg.add_argument("--max-lag", type=int, default=6)
     pg.add_argument("--bin-ms", type=float, default=5.0)
     pg.add_argument("--l2", type=float, default=2.0)
+    pg.add_argument("--readout", choices=["lag1", "sum", "peak"], default="peak",
+                    help="edge score reduction over lags; 'peak' selects the "
+                         "largest-|coef| lag per edge (default, recommended)")
     pg.add_argument("--edges", action="store_true",
                     help="also run the label-free jitter-FDR edge prediction (heavier)")
 
