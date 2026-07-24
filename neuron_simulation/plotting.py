@@ -45,6 +45,8 @@ def plot_raster(
     title="Network raster",
     randomize_rows=False,
     row_seed=0,
+    dot_size=20.0,
+    show_burst_count=True,
 ):
     """Plot a cluster-sorted spike raster with a population-activity panel.
 
@@ -59,6 +61,10 @@ def plot_raster(
         burn_in_ms: Startup transient marked with a vertical dashed line.
         detect_bursts: Whether to shade detected network-burst windows.
         title: Figure title.
+        dot_size: Marker area (matplotlib ``scatter`` ``s``) for each spike dot.
+            Lower values give finer dots, which read better on long recordings.
+        show_burst_count: If ``True`` (and ``detect_bursts``), append the detected
+            network-burst count to the title. Burst shading is unaffected.
 
     Returns:
         The Matplotlib ``Figure``.
@@ -84,7 +90,7 @@ def plot_raster(
             continue
         y = np.full(s.shape, row_of[nid])
         color = _INH_COLOR if is_inhibitory[nid] else _EXC_COLOR
-        ax_r.scatter(s, y, s=20.0, c=color, marker=".", linewidths=0.0)
+        ax_r.scatter(s, y, s=dot_size, c=color, marker=".", linewidths=0.0)
     ax_r.set_ylabel("neuron (randomized)" if randomize_rows else "neuron (cluster-sorted)")
     ax_r.set_title(title)
     ax_r.set_ylim(-1, n_neurons)
@@ -105,7 +111,8 @@ def plot_raster(
         for b in bursts:
             ax_r.axvspan(b["start_ms"], b["end_ms"], color="orange", alpha=0.12)
         ax_p.legend(loc="upper right", fontsize=8)
-        ax_r.set_title(f"{title}  ({len(bursts)} network bursts)")
+        if show_burst_count:
+            ax_r.set_title(f"{title}  ({len(bursts)} network bursts)")
 
     fig.tight_layout()
     return fig
