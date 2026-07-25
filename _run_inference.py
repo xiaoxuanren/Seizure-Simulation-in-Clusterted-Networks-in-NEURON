@@ -135,6 +135,12 @@ def cmd_glm(args):
     cand, _ = glm.candidate_mask(n, s["positions"], None)
     ye, yi = gt["A_exc"][cand], gt["A_inh"][cand]
 
+    if args.calibrate:
+        print("\n[GLM] FDR calibration (estimated vs realized FDR across targets)...")
+        glm.calibrate_fdr(args.session, bin_ms=args.bin_ms, max_lag=args.max_lag,
+                          l2=args.l2, readout=args.readout)
+        return
+
     tf = time.time()
     B = fit_B_blockwise(M, bnd, args.max_lag, args.l2)
     print("[GLM] joint lag fit (max_lag=%d, l2=%.1f) in %.1fs" % (
@@ -173,7 +179,8 @@ def cmd_glm(args):
         print("\n[GLM] label-free predicted edges via glm.run (readout=%s, all recordings)..."
               % args.readout)
         res, m = glm.run(args.session, bin_ms=args.bin_ms, max_lag=args.max_lag,
-                         l2=args.l2, readout=args.readout, save=True)
+                         l2=args.l2, readout=args.readout,
+                         target_fdr=args.target_fdr, save=True)
         ca = m["confusion_all_edges"]
         print("[GLM] %s @FDR%.2f: %d exc + %d inh edges -> TP=%d FP=%d FN=%d "
               "(P=%.2f R=%.2f F1=%.2f); neuron-type AUC=%.3f" % (
@@ -234,6 +241,17 @@ def cmd_lif(args):
                 L.get("fdr", float("nan")), L.get("_seconds", float("nan"))))
 
 
+def _readout_arg(x):
+    """Accept lag1, sum, peak, or sum_k / sumN (e.g. sum4)."""
+    x2 = str(x).strip().lower()
+    if x2 in ("lag1", "sum", "peak"):
+        return x2
+    if x2.startswith("sum") and x2[3:].lstrip("_").isdigit() and int(x2[3:].lstrip("_")) >= 1:
+        return x2
+    raise argparse.ArgumentTypeError(
+        "invalid readout %r; use lag1, sum, peak, or sum_k (e.g. sum4)" % (x,))
+
+
 def main():
     p = argparse.ArgumentParser(description="GLM + learned-LIF inference on a NEURON session")
     p.add_argument("--session", default=DEFAULT_SESSION)
@@ -245,9 +263,13 @@ def main():
     pg.add_argument("--max-lag", type=int, default=6)
     pg.add_argument("--bin-ms", type=float, default=5.0)
     pg.add_argument("--l2", type=float, default=2.0)
-    pg.add_argument("--readout", choices=["lag1", "sum", "peak"], default="peak",
-                    help="edge score reduction over lags; 'peak' selects the "
-                         "largest-|coef| lag per edge (default, recommended)")
+    pg.add_argument("--readout", type=_readout_arg, default="sum4",
+                    help="lag score reduction: lag1|sum|peak|sum_k; 'sum4' "
+                         "(default) sums lags 1-4 -- best exc ranking; see --calibrate")
+    pg.add_argument("--target-fdr", type=float, default=0.1,
+                    help="jitter-null FDR target for --edges (nominal; see --calibrate)")
+    pg.add_argument("--calibrate", action="store_true",
+                    help="sweep target_fdr, report estimated vs realized FDR, then exit")
     pg.add_argument("--edges", action="store_true",
                     help="also run the label-free jitter-FDR edge prediction (heavier)")
 
