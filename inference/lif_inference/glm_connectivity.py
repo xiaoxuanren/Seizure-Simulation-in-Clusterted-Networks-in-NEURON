@@ -1,4 +1,4 @@
-"""Fine-resolution multivariate GLM connectivity inference (per-edge peak readout).
+"""Fine-resolution multivariate GLM connectivity inference (sum_k readout: fit wide, read narrow).
 
 What changed vs the summed-window version
 -----------------------------------------
@@ -9,29 +9,38 @@ What changed vs the summed-window version
    common-input / polysynaptic noise; ``readout='lag1'`` fixed that by reading
    only the lag-1 coefficient.
 
-   ``readout='peak'`` (the current default) goes further and picks the
-   largest-|coefficient| lag *per edge*, label-free. This matters because the
-   monosynaptic delay is heterogeneous across edges and differs systematically
-   by sign: on the 926-neuron / 50-recording normal flagship the excitatory
-   population peaks at lag 2 (5-10 ms, exc AUC 0.936) while the inhibitory
-   population peaks at lag 1 (0-5 ms, inh AUC 0.866). No single global lag can
-   serve both, so any fixed choice discards most of one layer.
+   ``readout='sum4'`` (the current default, family ``sum_k``) goes further:
+   fit wide (lags 1..``max_lag``) but read narrow (sum only lags 1..k). The wide
+   joint fit absorbs slow common-input structure so it does not leak into the
+   short lags, while the narrow readout drops the late lags (5-6) that carry no
+   signal (per-lag AUC ~0.5-0.6). This is the best excitatory *ranking* measured
+   on the flagship (k=4: AP 0.873, vs peak 0.834, sum-all 0.860, lag1 0.447).
 
-   Measured on that session, whole-map, at the label-free jitter-null operating
-   point (see 2), switching lag1 -> peak is a strict Pareto improvement:
+   ``readout='peak'`` picks the largest-|coefficient| lag *per edge*; it ranks
+   slightly worse than ``sum4`` but uniquely recovers the per-edge conduction
+   delay (peak lag vs true delay r=0.807), so keep it for that analysis.
 
-       readout  FDR    TP     FP    FN     P      R      F1
-       lag1     0.10   3724   203   9632   0.948  0.279  0.431
-       peak     0.05   6253   123   7103   0.981  0.468  0.634
-       peak     0.10   6994   306   6362   0.958  0.524  0.677
+   IMPORTANT -- readout interacts with the FDR rule (see 2). The spike-jitter
+   null is conservative, and integrating readouts ('sum'/'sum_k') span 0-20 ms
+   so they are far more exposed to the surrogate common-drive inflation than the
+   sharp 'peak'. On the flagship, at the nominal ``target_fdr=0.10`` the realized
+   FDR is 0.043 for 'peak' but only ~0.001 for 'sum4' -- i.e. 'sum4' at the
+   default target runs *very* tight and returns fewer edges than 'peak' does.
+   The better ranking only turns into more recovered edges once the target is set
+   against the realized FDR: use ``calibrate_fdr`` / ``--calibrate`` to do this.
+   At matched realized FDR ~0.10, 'sum4' beats 'peak' by roughly +500 TP.
 
-   i.e. peak @ 0.05 delivers +2529 TP and -2529 FN against the shipped lag1 @
-   0.10 point while *lowering* FP (123 vs 203). ``readout='lag1'`` and
-   ``readout='sum'`` restore the previous behaviours.
+       readout  target  realFDR  TP     FP     P      R      F1
+       peak     0.10     0.043   7009    314   0.957  0.525  0.678
+       peak     0.20     0.097   7811    838   0.903  0.585  0.710
+       sum4     0.10     0.001   3691      4   0.999  0.276  0.433   <- too tight
+       sum4     0.50     0.053   7724    430   0.947  0.578  0.718
+       sum4     0.70     0.126   8787   1271   0.874  0.658  0.751
 
-   NOTE: ``max_lag`` now defaults to 6. The peak readout selects among lags, so
-   the window must be wide enough to contain the true delay spread; at
-   ``max_lag=4`` the tail of the distribution is truncated.
+   ``readout='lag1'`` and ``readout='sum'`` restore the older behaviours.
+
+   NOTE: ``max_lag`` defaults to 6 -- wide enough to contain the delay spread;
+   ``sum_k`` reads only the first k of those lags (k=4 default).
 
 2. **Label-free operating point (jitter null).** The threshold is chosen so the
    expected number of exceedances under a *spike-jitter* surrogate divided by the
@@ -64,6 +73,7 @@ from __future__ import annotations
 import argparse
 import glob
 import os
+import sys
 
 import numpy as np
 
@@ -162,20 +172,27 @@ def _lagged_features(spike_matrix, boundaries, max_lag):
     return feats
 
 
-def glm_connectivity(spike_matrix, boundaries, max_lag=6, l2=2.0, readout="peak"):
+def glm_connectivity(spike_matrix, boundaries, max_lag=6, l2=2.0, readout="sum4"):
     """Signed direct-coupling matrix ``W[pre, post]`` via one lag-resolved ridge.
 
     Fits ``B[lag, pre, post]`` jointly across lags 1..``max_lag`` with a single
     ridge solve, then reduces to a ``[N, N]`` score:
 
-    * ``readout='peak'`` (default) -- the signed coefficient at the
-      largest-|coef| lag, chosen per edge. Handles the heterogeneous and
-      sign-dependent monosynaptic delay; best excitatory *and* inhibitory
-      ranking. See the module docstring for the measured gain.
-    * ``readout='lag1'`` -- the lag-1 coefficient ``B[0]`` only (previous
-      default; correct when every edge shares a 0-5 ms delay, but discards the
-      excitatory layer when that population peaks at lag 2).
-    * ``readout='sum'`` -- the sum over lags (the original behaviour).
+    * ``readout='sum4'`` (default, family ``sum_k``) -- fit wide (``max_lag``),
+      read narrow: sum only lags 1..k. The wide joint fit absorbs slow
+      common-input structure while the narrow readout drops the late lags (5-6)
+      that are pure noise. Best excitatory ranking measured on the flagship
+      (k=4: AP 0.873 vs peak 0.834, sum-all 0.860). NOTE: integrating readouts
+      make the jitter null more conservative than ``peak`` does, so the nominal
+      ``target_fdr`` runs tighter than its face value -- use ``calibrate_fdr``
+      to choose the target against the *realized* FDR.
+    * ``readout='peak'`` -- the signed coefficient at the largest-|coef| lag,
+      chosen per edge. Sharp-timing; recovers per-edge conduction delay (peak
+      lag vs true delay r=0.807), so keep it for the delay-recovery analysis.
+    * ``readout='lag1'`` -- the lag-1 coefficient ``B[0]`` only (correct when
+      every edge shares a 0-5 ms delay; discards edges that peak at lag 2).
+    * ``readout='sum'`` -- the sum over *all* lags (original behaviour;
+      == ``sum_k`` with k=``max_lag``).
 
     ``W[i, j] > 0`` excitatory coupling, ``< 0`` inhibitory. Self-coupling
     (diagonal) is zeroed. Score excitatory edges by ``+W``, inhibitory by ``-W``.
@@ -194,8 +211,16 @@ def glm_connectivity(spike_matrix, boundaries, max_lag=6, l2=2.0, readout="peak"
     elif readout == "peak":
         idx = np.abs(B).argmax(0)
         W = np.take_along_axis(B, idx[None], 0)[0]
+    elif readout.startswith("sum"):
+        # 'sum_k' / 'sumN': fit wide (max_lag), read narrow -- sum only lags 1..k.
+        suffix = readout[3:].lstrip("_")
+        if not suffix.isdigit() or int(suffix) < 1:
+            raise ValueError(f"'sum_k' readout needs a positive integer k, got {readout!r}")
+        k = min(int(suffix), max_lag)          # clamp: 'sum4' with max_lag=3 == 'sum'
+        W = B[:k].sum(0)
     else:
-        raise ValueError(f"readout must be 'lag1', 'sum', or 'peak', got {readout!r}")
+        raise ValueError(
+            f"readout must be 'lag1', 'sum', 'peak', or 'sum_k' (e.g. 'sum4'), got {readout!r}")
     np.fill_diagonal(W, 0.0)
     return W
 
@@ -250,7 +275,7 @@ def _fdr_threshold(obs, null_scores, target_fdr):
 
 def jitter_fdr_threshold(spike_matrix, boundaries, W, candidates, target_fdr=0.1,
                          jitter_bins=5, n_surrogates=8, max_lag=6, l2=2.0,
-                         readout="peak", sign=+1, seed=1):
+                         readout="sum4", sign=+1, seed=1):
     """Threshold ``sign * W`` at a target FDR using a spike-jitter null.
 
     Refits the GLM (same ``readout``) on ``n_surrogates`` jittered copies of the
@@ -293,7 +318,7 @@ def candidate_mask(n_neurons, positions=None, radius=None):
 # --------------------------------------------------------------------------- #
 # Inference (no ground truth needed)
 # --------------------------------------------------------------------------- #
-def infer_connectivity(session_dir, bin_ms=5.0, max_lag=6, l2=2.0, readout="peak",
+def infer_connectivity(session_dir, bin_ms=5.0, max_lag=6, l2=2.0, readout="sum4",
                        target_fdr=0.1, jitter_ms=25.0, n_surrogates=8, radius=None,
                        seed=1):
     """Infer a directed, signed adjacency from spikes alone (label-free).
@@ -380,7 +405,7 @@ def evaluate(result, gt):
 # --------------------------------------------------------------------------- #
 # Pipeline
 # --------------------------------------------------------------------------- #
-def run(session_dir, bin_ms=5.0, max_lag=6, l2=2.0, readout="peak", target_fdr=0.1,
+def run(session_dir, bin_ms=5.0, max_lag=6, l2=2.0, readout="sum4", target_fdr=0.1,
         jitter_ms=25.0, n_surrogates=8, radius=None, seed=1, save=True):
     """Infer -> (optionally evaluate) -> save. Runs with or without ground truth."""
     result = infer_connectivity(session_dir, bin_ms, max_lag, l2, readout,
@@ -401,24 +426,118 @@ def run(session_dir, bin_ms=5.0, max_lag=6, l2=2.0, readout="peak", target_fdr=0
     return result, metrics
 
 
+def calibrate_fdr(session_dir, targets=(0.05, 0.1, 0.2, 0.3, 0.5, 0.7),
+                  bin_ms=5.0, max_lag=6, l2=2.0, readout="sum4",
+                  jitter_ms=25.0, n_surrogates=8, seed=1, verbose=True):
+    """Report ESTIMATED (jitter-null) vs REALIZED (needs ground truth) FDR across
+    ``target_fdr`` values, for the excitatory (+W) discovery problem.
+
+    The spike-jitter null is conservative -- surrogates keep the burst envelope
+    and cluster co-activation, and with no true edges to absorb that variance the
+    common drive spreads across all pairs and inflates the null. Integrating
+    readouts ('sum'/'sum_k') span 0-20 ms and are far more exposed to this than
+    the sharp-timing 'peak', so the nominal ``target_fdr`` overstates the true
+    FDR *more* for 'sum_k'. When ground truth is present (simulation) this prints
+    the gap so the operating target can be chosen against the realized FDR; on
+    real data (no gt) only the estimated column is available.
+
+    Fits W and the surrogate nulls ONCE, then sweeps ``targets`` over the stored
+    scores (cheap). Returns a list of per-target dicts.
+    """
+    s = load_spikes(session_dir)
+    n = s["n_neurons"]
+    M, bnd = build_spike_matrix(s["recordings"], n, bin_ms)
+    W = glm_connectivity(M, bnd, max_lag=max_lag, l2=l2, readout=readout)
+    cand, _ = candidate_mask(n, s["positions"], None)
+    jitter_bins = max(1, int(round(jitter_ms / bin_ms)))
+    rng = np.random.default_rng(seed)
+    null = np.array([
+        glm_connectivity(_jitter_matrix(M, bnd, jitter_bins, rng),
+                         bnd, max_lag=max_lag, l2=l2, readout=readout)[cand]
+        for _ in range(n_surrogates)])           # [n_surrogates, n_candidates]
+    obs = W[cand]
+
+    gt = load_ground_truth(session_dir)
+    y = None
+    if gt is not None and "A_exc" in gt:
+        any_edge = gt["A_exc"] | gt.get("A_inh", np.zeros_like(gt["A_exc"]))
+        y = any_edge[cand]                        # any-edge, matches confusion_all_edges
+
+    rows = []
+    for t in targets:
+        thr = _fdr_threshold(obs, null, t)
+        sel = obs >= thr
+        n_pred = int(sel.sum())
+        est_fp = float((null >= thr).sum()) / null.shape[0]
+        row = {"target_fdr": t, "threshold": float(thr), "n_pred": n_pred,
+               "est_fdr": est_fp / max(n_pred, 1)}
+        if y is not None:
+            TP = int((sel & y).sum()); FP = int((sel & ~y).sum())
+            FN = int((~sel & y).sum())
+            row.update(TP=TP, FP=FP, FN=FN,
+                       realized_fdr=FP / max(TP + FP, 1),
+                       precision=TP / max(TP + FP, 1),
+                       recall=TP / max(TP + FN, 1),
+                       f1=(2 * TP) / max(2 * TP + FP + FN, 1))
+        rows.append(row)
+
+    if verbose:
+        has_gt = y is not None
+        print(f"FDR calibration | readout={readout} bin={bin_ms}ms max_lag={max_lag} "
+              f"l2={l2} jitter={jitter_ms}ms n_surrogates={n_surrogates}")
+        if has_gt:
+            print(f"  {'target':>7} {'thr':>8} {'n_pred':>7} {'est_FDR':>8} "
+                  f"{'realFDR':>8} {'TP':>6} {'FP':>6} {'prec':>6} {'rec':>6} {'F1':>6}")
+            for r in rows:
+                print(f"  {r['target_fdr']:>7.2f} {r['threshold']:>8.4f} {r['n_pred']:>7} "
+                      f"{r['est_fdr']:>8.4f} {r['realized_fdr']:>8.4f} {r['TP']:>6} "
+                      f"{r['FP']:>6} {r['precision']:>6.3f} {r['recall']:>6.3f} {r['f1']:>6.3f}")
+            print("  NOTE: est_FDR is what the jitter null claims; realFDR is the truth. "
+                  "Pick target by the realFDR column.")
+        else:
+            print(f"  {'target':>7} {'thr':>8} {'n_pred':>7} {'est_FDR':>8}   (no ground truth: realized FDR unavailable)")
+            for r in rows:
+                print(f"  {r['target_fdr']:>7.2f} {r['threshold']:>8.4f} {r['n_pred']:>7} {r['est_fdr']:>8.4f}")
+    return rows
+
+
 def build_parser():
-    p = argparse.ArgumentParser(description="Fine-resolution GLM connectivity (peak readout, jitter FDR)")
+    p = argparse.ArgumentParser(description="Fine-resolution GLM connectivity (sum_k readout, jitter FDR)")
     p.add_argument("session_dir")
     p.add_argument("--bin-ms", type=float, default=5.0)
     p.add_argument("--max-lag", type=int, default=6)
     p.add_argument("--l2", type=float, default=2.0)
-    p.add_argument("--readout", choices=["lag1", "sum", "peak"], default="peak")
+    p.add_argument("--readout", type=_readout_arg, default="sum4",
+                   help="lag1 | sum | peak | sum_k (e.g. sum4, the default)")
     p.add_argument("--target-fdr", type=float, default=0.1)
     p.add_argument("--jitter-ms", type=float, default=25.0)
     p.add_argument("--n-surrogates", type=int, default=8)
     p.add_argument("--radius", type=float, default=None,
                    help="geometry candidate radius; default whole-map")
     p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--calibrate", action="store_true",
+                   help="sweep target_fdr and report estimated vs realized FDR, then exit")
     return p
+
+
+def _readout_arg(s):
+    """argparse validator: accept lag1, sum, peak, or sum_k / sumN."""
+    s2 = str(s).strip().lower()
+    if s2 in ("lag1", "sum", "peak"):
+        return s2
+    if s2.startswith("sum") and s2[3:].lstrip("_").isdigit() and int(s2[3:].lstrip("_")) >= 1:
+        return s2
+    raise argparse.ArgumentTypeError(
+        f"invalid readout {s!r}; use lag1, sum, peak, or sum_k (e.g. sum4)")
 
 
 if __name__ == "__main__":
     a = build_parser().parse_args()
+    if a.calibrate:
+        calibrate_fdr(a.session_dir, bin_ms=a.bin_ms, max_lag=a.max_lag, l2=a.l2,
+                      readout=a.readout, jitter_ms=a.jitter_ms,
+                      n_surrogates=a.n_surrogates, seed=a.seed)
+        sys.exit(0)
     result, metrics = run(a.session_dir, bin_ms=a.bin_ms, max_lag=a.max_lag, l2=a.l2,
                           readout=a.readout, target_fdr=a.target_fdr,
                           jitter_ms=a.jitter_ms, n_surrogates=a.n_surrogates,
