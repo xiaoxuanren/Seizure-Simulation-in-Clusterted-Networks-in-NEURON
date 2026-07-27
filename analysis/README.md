@@ -21,6 +21,7 @@ to point elsewhere.
 |---|---|---|
 | `glm_scaling.py` | `glm_scaling_vs_duration.png`, `glm_scaling_metrics.json` | edge recovery (TP / precision / recall / F1 / AUC / AP) vs recording duration, at **oracle** operating points (best-F1 and ground-truth 10% FDR) |
 | `glm_labelfree_scaling.py` | `glm_labelfree_scaling_vs_duration.png`, `glm_labelfree_scaling_metrics.json` | the same, but at the **actual label-free** jitter-FDR operating point (sum4 @ target 0.70); shows realized FDR drifting with data size |
+| `glm_labelfree_fdr_duration.py` | `glm_labelfree_fdr_duration.png`, `glm_labelfree_fdr_duration_metrics.json` | full **target-FDR (0.1–1.0) × duration (5–100 min)** grid: realized FDR / recall / F1. The target needed for a *true* 10% FDR rises ~0.3 (5 min) → ~0.7 (100 min), so a fixed target is mis-calibrated across durations |
 | `glm_labelfree_fig.py` | `figures/glm_predicted_topology_labelfree_sum4_100rec.png` | predicted-vs-true wiring (spatial map + cluster-sorted adjacency), TP/FP/FN |
 | `glm_cluster_recovery.py` | `figures/glm_cluster_recovery_heatmap_sum4_100rec.png` | per-cluster recall heatmap; within- vs between-cluster recovery (common-input confound) |
 | `glm_distance_recovery.py` | `figures/glm_distance_recovery_sum4_100rec.png` | recall/precision vs inter-neuron distance, within/between split, signal-vs-null strength |
