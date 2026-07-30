@@ -153,6 +153,13 @@ def main():
                          "library and writes to its own folder.")
     ap.add_argument("--sahp-ainc-slow", type=float, default=None,
                     help="override the state's knob value (uS)")
+    ap.add_argument("--noise-seed-base", type=int, default=None,
+                    help="base seed for the per-neuron Poisson streams "
+                         "(Random123(base, gid, recording_index)). Defaults to "
+                         "the flagship's value, which makes each dephased "
+                         "recording share its noise with the flagship recording "
+                         "of the same index -- a controlled comparison. Change it "
+                         "for independent noise.")
     ap.add_argument("--discard-extra-ms", type=float, default=0.0,
                     help="added to the flagship's discard_transient_ms. The "
                          "warm start rebuilds synaptic conductance from zero over "
@@ -183,9 +190,11 @@ def main():
             "library/state mismatch: %s was warmed up at sahp_ainc_slow=%.4f but "
             "this run wants %.4f. Warm-starting one state from another's "
             "snapshots adds a relaxation transient." % (libpath, lib_knob, knob))
-    print("state '%s': sahp_ainc_slow = %.4f uS -> %s"
-          % (state, knob, outdir), flush=True)
-    net = build_network(cfg["topology"], noise_seed=cfg["noise_seed_base"],
+    seed_base = (a.noise_seed_base if a.noise_seed_base is not None
+                 else cfg["noise_seed_base"])
+    print("state '%s': sahp_ainc_slow = %.4f uS, noise_seed_base = %d -> %s"
+          % (state, knob, seed_base, outdir), flush=True)
+    net = build_network(cfg["topology"], noise_seed=seed_base,
                         report_deviations=False, **bk)
     n = net.n_neurons
     discard = float(cfg["discard_transient_ms"]) + float(a.discard_extra_ms)
@@ -269,7 +278,7 @@ def main():
                       init_mode="dephased_warmstart",
                       discard_transient_ms=discard,
                       state_name=state, sahp_ainc_slow=knob,
-                      n_neurons=n)
+                      noise_seed_base=int(seed_base), n_neurons=n)
         if voltage_data is not None:
             merged.update(voltage_gids=probe.astype(np.int32),
                           voltage_mode=a.voltage)

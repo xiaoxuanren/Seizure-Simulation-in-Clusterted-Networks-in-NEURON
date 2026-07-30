@@ -82,16 +82,22 @@ def main():
                          "transient.")
     ap.add_argument("--sahp-ainc-slow", type=float, default=None,
                     help="override the state's knob value (uS)")
+    ap.add_argument("--noise-seed-base", type=int, default=None,
+                    help="base seed for the per-neuron Poisson streams "
+                         "(Random123(base, gid, recording_index)). Defaults to "
+                         "the flagship's value from the worker config.")
     a = ap.parse_args()
 
     cfg = pickle.load(open(FLAGSHIP_CFG, "rb"))
     bk = dict(cfg["build_kwargs"])
     knob = a.sahp_ainc_slow if a.sahp_ainc_slow is not None else STATE_SAHP[a.state]
     bk["sahp_ainc_slow"] = float(knob)
+    seed_base = (a.noise_seed_base if a.noise_seed_base is not None
+                 else cfg["noise_seed_base"])
     OUT = library_path(a.state)
-    print("state '%s': sahp_ainc_slow = %.4f uS -> %s"
-          % (a.state, knob, os.path.basename(OUT)), flush=True)
-    net = build_network(cfg["topology"], noise_seed=cfg["noise_seed_base"],
+    print("state '%s': sahp_ainc_slow = %.4f uS, noise_seed_base = %d -> %s"
+          % (a.state, knob, seed_base, os.path.basename(OUT)), flush=True)
+    net = build_network(cfg["topology"], noise_seed=seed_base,
                         report_deviations=False, **bk)
     for g in net.noise:
         g.reseed(a.recording_index)
@@ -120,6 +126,7 @@ def main():
     payload["warmup_recording_index"] = int(a.recording_index)
     payload["state"] = a.state
     payload["sahp_ainc_slow"] = float(knob)
+    payload["noise_seed_base"] = int(seed_base)
     np.savez_compressed(OUT, **payload)
 
     gs = payload["g_slow"]
