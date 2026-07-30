@@ -9,10 +9,15 @@ import os, sys, json, time
 import numpy as np
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sparse_glm as sg
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 
-SESSION = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal", "20260721_163430")
+# Dataset location. Override with the DATASET_SESSION / DATASET_STATE env
+# vars, or edit here. `python session_paths.py` lists what is available.
+from session_paths import resolve  # noqa: E402
+SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
+                  os.environ.get("DATASET_STATE", "normal"))
 SIZES = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 TARGETS = np.round(np.arange(0.1, 1.001, 0.1), 2)          # 0.1 .. 1.0
 BIN_MS, MAX_LAG, L2, KSUM = 5.0, 6, 2.0, 4

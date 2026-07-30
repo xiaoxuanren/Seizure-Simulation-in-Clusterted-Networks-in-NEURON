@@ -19,6 +19,7 @@ voltage), both raster variants, and a ``_summary_NNN.json``.
 """
 
 import argparse
+import glob
 import json
 import os
 import sys
@@ -33,7 +34,8 @@ sys.path.insert(0, HERE)
 
 from neuron import h  # noqa: E402
 from neuron_simulation import analysis  # noqa: E402
-from neuron_simulation.io import save_recording_data  # noqa: E402
+from neuron_simulation.io import (save_network_structure,  # noqa: E402
+                                 save_recording_data)
 from neuron_simulation.network_builder import build_network  # noqa: E402
 from neuron_simulation.workflows import _bursts_to_windows  # noqa: E402
 from dataset_warmstart import (build_for, library_path,  # noqa: E402
@@ -102,6 +104,13 @@ def main():
     state = a.state
     out_dir = os.path.join(session_dir, state)
     os.makedirs(out_dir, exist_ok=True)
+
+    # Ground truth next to the recordings, so sparse_glm.load_ground_truth and
+    # anything else that globs network_*.npz works on this folder directly.
+    if not glob.glob(os.path.join(out_dir, "network_*.npz")):
+        save_network_structure(topology["connections"], topology["neuron_positions"],
+                               cluster_info, topology["weight_params"],
+                               state, session_dir)
 
     lp = library_path(session_dir, state)
     if not os.path.exists(lp):
