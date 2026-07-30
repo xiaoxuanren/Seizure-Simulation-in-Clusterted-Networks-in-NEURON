@@ -33,7 +33,7 @@ from neuron_simulation.workflows import _bursts_to_windows  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from dephase_generate import (SAVE_ROOT, SESSION_TAG, OUT_DIR,  # noqa: E402
+from dephase_generate import (SAVE_ROOT, STATE_SAHP, out_dir,  # noqa: E402
                              write_rasters, write_summary)
 
 FLAGSHIP_CFG = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal",
@@ -50,8 +50,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-rasters", action="store_true")
+    ap.add_argument("--state", default="normal",
+                    help="which dephased state folder to back-fill")
     a = ap.parse_args()
 
+    OUT_DIR = out_dir(a.state)
+    SESSION_TAG = a.state
     cfg = pickle.load(open(FLAGSHIP_CFG, "rb"))
     paths = sorted(glob.glob(os.path.join(OUT_DIR, "recording*.npz")))
     paths = [p for p in paths if "raster" not in os.path.basename(p)]
@@ -115,7 +119,9 @@ def main():
         if not a.no_rasters:
             raster, raster_shuf = write_rasters(
                 spike_data, n, dur, cfg["topology"], rec_idx, OUT_DIR,
-                sahp_ainc_slow=cfg["build_kwargs"].get("sahp_ainc_slow"))
+                sahp_ainc_slow=float(old["sahp_ainc_slow"])
+                if "sahp_ainc_slow" in old else STATE_SAHP.get(a.state),
+                state=a.state)
         write_summary(rec_idx, OUT_DIR, rec_file, raster, raster_shuf, stats,
                       n_sp,
                       extra=dict(snapshot_index=int(old["snapshot_index"])

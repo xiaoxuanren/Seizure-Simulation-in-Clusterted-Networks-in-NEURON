@@ -38,19 +38,34 @@ from neuron_simulation.workflows import _bursts_to_windows  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 FLAGSHIP_CFG = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal",
                             "20260721_163430", "_worker_config.pkl")
-LIBRARY = os.path.join(HERE, "dephase_state_library.npz")
-# save_recording_data joins SAVE_ROOT / SESSION_TAG, so the files land in
-# notebooks/NEURON data parallel/dephased_ic/ -- the same folder as the pilot.
-SAVE_ROOT = os.path.join(REPO, "notebooks", "NEURON data parallel")
-SESSION_TAG = "dephased_ic"
-OUT_DIR = os.path.join(SAVE_ROOT, SESSION_TAG)
+# The single knob (states.py): normal 0.01, seizure 0.004. Nothing else differs.
+STATE_SAHP = {"normal": 0.01, "seizure": 0.004}
+
+# save_recording_data joins SAVE_ROOT / SESSION_TAG, so output lands in
+# notebooks/NEURON data parallel/dephased_ic/<state>/ -- one folder per state,
+# mirroring the flagship's normal/ and seizure/ split.
+SAVE_ROOT = os.path.join(REPO, "notebooks", "NEURON data parallel", "dephased_ic")
+
+
+def library_path(state):
+    return os.path.join(HERE, "dephase_state_library_%s.npz" % state)
+
+
+def out_dir(state):
+    return os.path.join(SAVE_ROOT, state)
+
+
+# Back-compat aliases for callers that predate the two-state split.
+SESSION_TAG = "normal"
+LIBRARY = library_path("normal")
+OUT_DIR = out_dir("normal")
 
 STATE_KEYS = ("v", "hh_m", "hh_h", "hh_n", "kA_m", "kA_h", "ko",
               "g_fast", "g_slow")
 
 
 def write_rasters(spike_data, n, duration_ms, topology, rec_idx, out_dir,
-                  sahp_ainc_slow=None, dot_size=20.0):
+                  sahp_ainc_slow=None, dot_size=20.0, state="normal"):
     """Both raster variants, matching the flagship pipeline's output.
 
     Returns ``(raster_path, raster_shuffled_path)``. Never raises -- a plotting
@@ -70,8 +85,8 @@ def write_rasters(spike_data, n, duration_ms, topology, rec_idx, out_dir,
                 is_inhibitory=topology.get("neuron_is_inhibitory"),
                 cluster_assignments=topology["cluster_assignments"],
                 burn_in_ms=0.0,
-                title="recording %03d - dephased_ic%s%s"
-                      % (rec_idx, knob,
+                title="recording %03d - dephased_ic/%s%s%s"
+                      % (rec_idx, state, knob,
                          " (randomized rows)" if shuffled else ""),
                 randomize_rows=shuffled, dot_size=dot_size,
                 show_burst_count=True)
@@ -133,6 +148,11 @@ def main():
                          "'probe' = an evenly spaced subset (default); 'none'")
     ap.add_argument("--voltage-probe-n", type=int, default=40)
     ap.add_argument("--voltage-dt", type=float, default=5.0)
+    ap.add_argument("--state", choices=sorted(STATE_SAHP), default="normal",
+                    help="single-knob state. Each state reads ITS OWN warm-start "
+                         "library and writes to its own folder.")
+    ap.add_argument("--sahp-ainc-slow", type=float, default=None,
+                    help="override the state's knob value (uS)")
     ap.add_argument("--discard-extra-ms", type=float, default=0.0,
                     help="added to the flagship's discard_transient_ms. The "
                          "warm start rebuilds synaptic conductance from zero over "
@@ -140,18 +160,39 @@ def main():
                          "inside the kept window; 2000 moves it outside.")
     a = ap.parse_args()
 
-    os.makedirs(OUT_DIR, exist_ok=True)
-    lib = np.load(LIBRARY)
+    state = a.state
+    session_tag = state
+    outdir = out_dir(state)
+    libpath = library_path(state)
+    os.makedirs(outdir, exist_ok=True)
+    if not os.path.exists(libpath):
+        raise SystemExit(
+            "no warm-start library for state '%s' at %s\n"
+            "  build it first:  python analysis/dephase_snapshot.py --state %s\n"
+            "  (each state needs its own -- the seizure network's stationary "
+            "state differs from normal's)" % (state, libpath, state))
+    lib = np.load(libpath)
     n_snap = lib["g_slow"].shape[0]
     cfg = pickle.load(open(FLAGSHIP_CFG, "rb"))
+    bk = dict(cfg["build_kwargs"])
+    knob = a.sahp_ainc_slow if a.sahp_ainc_slow is not None else STATE_SAHP[state]
+    bk["sahp_ainc_slow"] = float(knob)
+    lib_knob = float(lib["sahp_ainc_slow"]) if "sahp_ainc_slow" in lib else None
+    if lib_knob is not None and abs(lib_knob - knob) > 1e-12:
+        raise SystemExit(
+            "library/state mismatch: %s was warmed up at sahp_ainc_slow=%.4f but "
+            "this run wants %.4f. Warm-starting one state from another's "
+            "snapshots adds a relaxation transient." % (libpath, lib_knob, knob))
+    print("state '%s': sahp_ainc_slow = %.4f uS -> %s"
+          % (state, knob, outdir), flush=True)
     net = build_network(cfg["topology"], noise_seed=cfg["noise_seed_base"],
-                        report_deviations=False, **cfg["build_kwargs"])
+                        report_deviations=False, **bk)
     n = net.n_neurons
     discard = float(cfg["discard_transient_ms"]) + float(a.discard_extra_ms)
     print("dephased generator: %d cells, %d snapshots in library" % (n, n_snap),
           flush=True)
 
-    net_path = os.path.join(OUT_DIR, "network_dephased.npz")
+    net_path = os.path.join(outdir, "network_dephased.npz")
     if a.start == 0 and not os.path.exists(net_path):
         topo = cfg["topology"]
         np.savez_compressed(
@@ -159,12 +200,13 @@ def main():
             neuron_is_inhibitory=np.asarray(topo["neuron_is_inhibitory"]),
             cluster_assignments=np.asarray(topo["cluster_assignments"]),
             neuron_positions=np.asarray(topo["neuron_positions"]),
-            note="dephased-IC branch: identical topology to the flagship; only "
-                 "the initial condition differs")
+            note="dephased-IC branch, state '%s' (sahp_ainc_slow=%.4f): identical "
+                 "topology to the flagship; the initial condition and the single "
+                 "knob are what differ" % (state, knob))
         print("  wrote ground truth -> %s" % os.path.basename(net_path), flush=True)
 
     for r in range(a.start, a.start + a.count):
-        out = os.path.join(OUT_DIR, "recording%03d.npz" % r)
+        out = os.path.join(outdir, "recording%03d.npz" % r)
         if os.path.exists(out):
             print("  skip recording%03d (exists)" % r, flush=True)
             continue
@@ -215,7 +257,7 @@ def main():
         stats = analysis.burst_statistics(bursts, a.duration, burn_in_ms=0.0)
 
         rec_file = save_recording_data(
-            spike_data, voltage_data, cfg["cluster_info"], r, SESSION_TAG,
+            spike_data, voltage_data, cfg["cluster_info"], r, session_tag,
             SAVE_ROOT, target_freq=cfg["target_freq"], duration=int(a.duration),
             burst_windows=bw, interburst_windows=ibw)
 
@@ -226,6 +268,7 @@ def main():
                       snapshot_time_ms=float(lib["snapshot_times_ms"][k]),
                       init_mode="dephased_warmstart",
                       discard_transient_ms=discard,
+                      state_name=state, sahp_ainc_slow=knob,
                       n_neurons=n)
         if voltage_data is not None:
             merged.update(voltage_gids=probe.astype(np.int32),
@@ -233,10 +276,11 @@ def main():
         np.savez_compressed(rec_file, **merged)
 
         raster, raster_shuf = write_rasters(
-            spike_data, n, a.duration, cfg["topology"], r, OUT_DIR,
-            sahp_ainc_slow=cfg["build_kwargs"].get("sahp_ainc_slow"))
-        write_summary(r, OUT_DIR, rec_file, raster, raster_shuf, stats, n_sp,
-                      extra=dict(snapshot_index=k,
+            spike_data, n, a.duration, cfg["topology"], r, outdir,
+            sahp_ainc_slow=knob, state=state)
+        write_summary(r, outdir, rec_file, raster, raster_shuf, stats, n_sp,
+                      extra=dict(snapshot_index=k, state_name=state,
+                                 sahp_ainc_slow=knob,
                                  init_mode="dephased_warmstart",
                                  discard_transient_ms=discard))
 

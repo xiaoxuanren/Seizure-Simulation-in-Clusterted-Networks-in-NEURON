@@ -11,6 +11,7 @@ scale up the dataset.
 Writes ``dephase_validation.json`` and ``dephase_validation.png``.
 """
 
+import argparse
 import glob
 import json
 import os
@@ -27,7 +28,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEPHASED = os.path.join(REPO, "notebooks", "NEURON data parallel", "dephased_ic")
+DEPHASED_ROOT = os.path.join(REPO, "notebooks", "NEURON data parallel", "dephased_ic")
 FLAGSHIP = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal",
                         "20260721_163430")
 FLAGSHIP_RATE = 0.2789
@@ -43,11 +44,17 @@ def load(d):
 
 
 def main():
-    fs = load(DEPHASED)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--state", default="normal",
+                    help="which dephased state folder to validate")
+    a = ap.parse_args()
+    dephased = os.path.join(DEPHASED_ROOT, a.state)
+    fs = load(dephased)
     if not fs:
-        print("no dephased recordings found in %s" % DEPHASED, flush=True)
+        print("no dephased recordings found in %s" % dephased, flush=True)
         return
-    print("dephased recordings: %d" % len(fs), flush=True)
+    print("state '%s': %d recordings in %s"
+          % (a.state, len(fs), dephased), flush=True)
 
     rates, vm_traces, all_bursts, vrest = [], [], [], []
     for i, p in enumerate(fs):
@@ -146,10 +153,11 @@ def main():
                         if all_pass else "AT LEAST ONE CHECK FAILED - do not scale up"),
           flush=True)
 
-    json.dump(dict(n_recordings=len(fs), all_passed=bool(all_pass),
+    json.dump(dict(state=a.state, n_recordings=len(fs), all_passed=bool(all_pass),
                    checks=checks,
                    per_recording_rate=[float(r) for r in rates]),
-              open(os.path.join(HERE, "dephase_validation.json"), "w"), indent=2)
+              open(os.path.join(HERE, "dephase_validation_%s.json" % a.state), "w"),
+              indent=2)
 
     if vm_traces:
         fig, ax = plt.subplots(2, 1, figsize=(13, 6.5))
@@ -175,9 +183,9 @@ def main():
         for a_ in ax:
             a_.spines[["top", "right"]].set_visible(False)
         fig.tight_layout()
-        p = os.path.join(HERE, "dephase_validation.png")
+        p = os.path.join(HERE, "dephase_validation_%s.png" % a.state)
         fig.savefig(p, dpi=145, facecolor="white")
-        print("saved -> dephase_validation.json / .png", flush=True)
+        print("saved -> dephase_validation_%s.json / .png" % a.state, flush=True)
 
 
 if __name__ == "__main__":
