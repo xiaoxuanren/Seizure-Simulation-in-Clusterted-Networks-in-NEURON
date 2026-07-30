@@ -47,6 +47,25 @@ def resolve(session=DEFAULT_SESSION, state=DEFAULT_STATE):
     return d
 
 
+def results_dir(session=DEFAULT_SESSION, state=DEFAULT_STATE, category=None,
+                create=True):
+    """Where ANALYSIS OUTPUT goes, kept out of the raw-data folders.
+
+        <session>/results/<state>/<category>/
+
+    Categories in use: glm, bursts, ic_artifact, figures, other. Raw recordings,
+    rasters and summaries stay in ``<session>/<state>/`` so a data folder holds
+    only data.
+    """
+    root = session if os.path.isabs(session) else session_dir(session)
+    d = os.path.join(root, "results", state)
+    if category:
+        d = os.path.join(d, category)
+    if create:
+        os.makedirs(d, exist_ok=True)
+    return d
+
+
 def list_sessions():
     """``{session: [state, ...]}`` for everything on disk."""
     out = {}

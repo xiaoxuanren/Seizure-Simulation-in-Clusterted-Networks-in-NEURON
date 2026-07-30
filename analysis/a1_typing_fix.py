@@ -40,6 +40,11 @@ from inference.lif_inference.glm_connectivity import (  # noqa: E402
 from session_paths import resolve  # noqa: E402
 SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
                   os.environ.get("DATASET_STATE", "normal"))
+from session_paths import results_dir  # noqa: E402
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+RESULTS = results_dir(_S, _T, "glm")
+FIGS = RESULTS
 BIN_MS, MAX_LAG, L2, KSUM = 5.0, 6, 2.0, 4
 TARGET_FDR, JITTER_MS, N_SURR, SEED = 0.70, 25.0, 8, 1
 JBINS = max(1, int(round(JITTER_MS / BIN_MS)))
@@ -222,7 +227,7 @@ def main():
                before="sign", after="rank@%.2f" % DEFAULT_FRACTION,
                variants=results)
     suffix = "" if a.n_recordings is None else "_n%d" % (len(bnd) - 1)
-    p = os.path.join(SESSION, "a1_typing_fix_results%s.json" % suffix)
+    p = os.path.join(RESULTS, "a1_typing_fix_results%s.json" % suffix)
     json.dump(out, open(p, "w"), indent=2)
 
     cols = ["variant", "table", "thr", "n_pred", "TP", "FP", "FN", "precision",
@@ -239,7 +244,7 @@ def main():
                 for c in ("thr", "n_pred", "TP", "FP", "FN", "precision",
                           "recall", "f1", "estimated_fdr", "realized_fdr")] + [
                 "%.6g" % r[c] for c in ("exc_auc", "exc_ap", "inh_auc", "inh_ap")]))
-    csvp = os.path.join(SESSION, "a1_typing_fix_tables%s.csv" % suffix)
+    csvp = os.path.join(RESULTS, "a1_typing_fix_tables%s.csv" % suffix)
     open(csvp, "w").write("\n".join(lines) + "\n")
     print("\nsaved -> a1_typing_fix_results.json / a1_typing_fix_tables.csv",
           flush=True)

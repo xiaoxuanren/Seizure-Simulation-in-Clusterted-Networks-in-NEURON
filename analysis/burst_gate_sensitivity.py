@@ -34,13 +34,18 @@ import matplotlib.pyplot as plt  # noqa: E402
 from session_paths import resolve  # noqa: E402
 SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
                   os.environ.get("DATASET_STATE", "normal"))
+from session_paths import results_dir  # noqa: E402
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+RESULTS = results_dir(_S, _T, "bursts")
+FIGS = results_dir(_S, _T, "figures")
 GATES = np.round(np.arange(0.05, 0.91, 0.05), 2)
 IC_WIN = (4500.0, 5500.0)
 TOTAL_S = 200 * 60.0
 
 
 def main():
-    paths = [p for p in sorted(glob.glob(os.path.join(SESSION, "recording*.npz")))
+    paths = [p for p in sorted(glob.glob(os.path.join(RESULTS, "recording*.npz")))
              if "raster" not in os.path.basename(p)]
     part, dur, start, rec = [], [], [], []
     t0 = time.time()
@@ -96,7 +101,7 @@ def main():
                        for q in (5, 25, 50, 75, 95)},
                    note="detector bracketing fixed (5 ms bins, 5% onset, 50 ms "
                         "merge, 10 ms pad); only the acceptance gate varies"),
-              open(os.path.join(SESSION, "burst_gate_sensitivity.json"), "w"),
+              open(os.path.join(RESULTS, "burst_gate_sensitivity.json"), "w"),
               indent=2)
 
     fig, ax = plt.subplots(1, 3, figsize=(15, 4.3))
@@ -140,7 +145,7 @@ def main():
                  "bracketing stage is unchanged throughout", fontsize=12,
                  fontweight="bold")
     fig.tight_layout(rect=[0, 0, 1, 0.92])
-    p = os.path.join(SESSION, "burst_gate_sensitivity.png")
+    p = os.path.join(FIGS, "burst_gate_sensitivity.png")
     fig.savefig(p, dpi=145, facecolor="white", bbox_inches="tight")
     print("\nsaved -> burst_gate_sensitivity.json / .png", flush=True)
 

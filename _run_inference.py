@@ -25,7 +25,8 @@ for _p in (REPO, os.path.join(REPO, "inference")):
         sys.path.insert(0, _p)
 
 DEFAULT_SESSION = os.path.join(
-    REPO, "notebooks", "NEURON data parallel", "normal", "20260721_163430"
+    REPO, "notebooks", "NEURON data parallel",
+    "IC-locked_flagship_200rec", "normal"
 )
 
 

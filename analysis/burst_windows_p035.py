@@ -43,6 +43,11 @@ import matplotlib.pyplot as plt  # noqa: E402
 from session_paths import resolve  # noqa: E402
 SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
                   os.environ.get("DATASET_STATE", "normal"))
+from session_paths import results_dir  # noqa: E402
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+RESULTS = results_dir(_S, _T, "bursts")
+FIGS = results_dir(_S, _T, "figures")
 THRESH = 0.35
 BURN_IN = 0.0
 IC_WINDOW = (4500.0, 5500.0)   # file clock; the stored 0.8 bursts sit at 4.73-5.09 s
@@ -50,7 +55,7 @@ LATER_FROM = 6000.0
 
 
 def main():
-    paths = [p for p in sorted(glob.glob(os.path.join(SESSION, "recording*.npz")))
+    paths = [p for p in sorted(glob.glob(os.path.join(RESULTS, "recording*.npz")))
              if "raster" not in os.path.basename(p)]
     print("recordings: %d | threshold %.2f | burn_in %.0f ms"
           % (len(paths), THRESH, BURN_IN), flush=True)
@@ -143,10 +148,10 @@ def main():
                recordings_with_burst_035=int((nb > 0).sum()),
                recordings_with_ic_burst=int(sum(1 for r in per_rec if r["n_ic"] > 0)),
                ic=s_ic, later=s_later, ks_uniform_later=ks, per_recording=per_rec)
-    json.dump(out, open(os.path.join(SESSION, "burstwindows_p035_summary.json"), "w"),
+    json.dump(out, open(os.path.join(RESULTS, "burstwindows_p035_summary.json"), "w"),
               indent=2)
     np.savez_compressed(
-        os.path.join(SESSION, "burstwindows_p035.npz"),
+        os.path.join(RESULTS, "burstwindows_p035.npz"),
         start_ms=np.array([b["start_ms"] for b in all_bursts]),
         end_ms=np.array([b["end_ms"] for b in all_bursts]),
         duration_ms=np.array([b["duration_ms"] for b in all_bursts]),
@@ -185,7 +190,7 @@ def main():
     fig.suptitle("Part B: burst windows recomputed at the 0.35 gate "
                  "(stored 0.8 windows untouched)", fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.94])
-    png = os.path.join(SESSION, "burstwindows_p035_starts.png")
+    png = os.path.join(FIGS, "burstwindows_p035_starts.png")
     fig.savefig(png, dpi=150, facecolor="white")
     print("\nsaved -> burstwindows_p035.npz / _summary.json / _starts.png",
           flush=True)
