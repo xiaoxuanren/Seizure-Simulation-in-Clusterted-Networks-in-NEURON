@@ -153,6 +153,10 @@ def main():
                          "library and writes to its own folder.")
     ap.add_argument("--sahp-ainc-slow", type=float, default=None,
                     help="override the state's knob value (uS)")
+    ap.add_argument("--build-overrides", type=str, default=None,
+                    help="JSON dict merged over the flagship build_kwargs, so a "
+                         "notebook can own the build config. Topology is NOT "
+                         "affected -- the graph is loaded materialised.")
     ap.add_argument("--noise-seed-base", type=int, default=None,
                     help="base seed for the per-neuron Poisson streams "
                          "(Random123(base, gid, recording_index)). Defaults to "
@@ -183,6 +187,14 @@ def main():
     cfg = pickle.load(open(FLAGSHIP_CFG, "rb"))
     bk = dict(cfg["build_kwargs"])
     knob = a.sahp_ainc_slow if a.sahp_ainc_slow is not None else STATE_SAHP[state]
+    if a.build_overrides:
+        ov = json.loads(a.build_overrides)
+        changed = {k: (bk.get(k), v) for k, v in ov.items() if bk.get(k) != v}
+        bk.update(ov)
+        if changed:
+            print("build overrides applied:", flush=True)
+            for k, (was, now) in sorted(changed.items()):
+                print("    %-20s %r -> %r" % (k, was, now), flush=True)
     bk["sahp_ainc_slow"] = float(knob)
     lib_knob = float(lib["sahp_ainc_slow"]) if "sahp_ainc_slow" in lib else None
     if lib_knob is not None and abs(lib_knob - knob) > 1e-12:
