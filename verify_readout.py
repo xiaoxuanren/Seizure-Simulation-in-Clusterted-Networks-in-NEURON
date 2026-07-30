@@ -5,7 +5,7 @@ Reproduces, from spikes alone, (a) the per-lag ranking sweep and (b) the
 label-free jitter-null operating points for each readout, so you can confirm
 per-dataset which reduction to ship.
 
-    python verify_readout.py --session "notebooks/NEURON data parallel/normal/20260721_163430_spikeonly"
+    python verify_readout.py --session "notebooks/NEURON data parallel/IC-locked_flagship_200rec/normal_spikeonly"
 
 Expected on the 926-neuron / 50-recording normal flagship (max_lag=6, l2=2.0,
 bin 5 ms, 6 surrogates, seed 1):

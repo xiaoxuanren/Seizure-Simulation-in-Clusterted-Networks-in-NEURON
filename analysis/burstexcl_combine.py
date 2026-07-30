@@ -20,6 +20,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from session_paths import resolve  # noqa: E402
 SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
                   os.environ.get("DATASET_STATE", "normal"))
+from session_paths import results_dir  # noqa: E402
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+RESULTS = results_dir(_S, _T, "ic_artifact")
+FIGS = results_dir(_S, _T, "figures")
 ARMS = [("A", "full"), ("B", "drop0-6s"), ("C", "drop30-36s")]
 
 import matplotlib  # noqa: E402
@@ -30,9 +35,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 def main():
     res, pred = {}, {}
     for arm, tag in ARMS:
-        res[arm] = json.load(open(os.path.join(SESSION, "burstexcl_%s_%s.json"
+        res[arm] = json.load(open(os.path.join(RESULTS, "burstexcl_%s_%s.json"
                                                % (arm, tag))))
-        pred[arm] = np.load(os.path.join(SESSION, "burstexcl_%s_%s.npz"
+        pred[arm] = np.load(os.path.join(RESULTS, "burstexcl_%s_%s.npz"
                                          % (arm, tag)))["pred"]
 
     rows = [
@@ -87,7 +92,7 @@ def main():
                  b, jac["%s^%s" % (a, b)]["only_b"]), flush=True)
 
     out = dict(arms={a: res[a] for a, _ in ARMS}, jaccard=jac)
-    json.dump(out, open(os.path.join(SESSION, "burstexcl_summary.json"), "w"),
+    json.dump(out, open(os.path.join(RESULTS, "burstexcl_summary.json"), "w"),
               indent=2)
 
     # --- figure ---
@@ -114,7 +119,7 @@ def main():
                  % (100 * (1 - res["B"]["raw_spikes_frac_kept"]),
                     100 * (1 - res["C"]["raw_spikes_frac_kept"])), fontsize=11)
     fig.tight_layout(rect=[0, 0, 1, 0.91])
-    png = os.path.join(SESSION, "burstexcl_arms.png")
+    png = os.path.join(FIGS, "burstexcl_arms.png")
     fig.savefig(png, dpi=150, facecolor="white")
     print("\nsaved -> burstexcl_summary.json / burstexcl_arms.png", flush=True)
 

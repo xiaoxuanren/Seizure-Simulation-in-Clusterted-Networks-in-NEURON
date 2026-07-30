@@ -28,9 +28,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sparse_glm as sg  # noqa: E402
 from burstexcl_glm_arm import (BIN_MS, JBINS, N_SURR, SEED,  # noqa: E402
                                fdr_threshold, sum4_W, SESSION)
+from session_paths import results_dir  # noqa: E402
+_S = os.environ.get('DATASET_SESSION', 'IC-locked_flagship_200rec')
+_T = os.environ.get('DATASET_STATE', 'normal')
+RESULTS = results_dir(_S, _T, 'glm')
+FIGS = results_dir(_S, _T, 'glm')
 
 TARGETS = np.round(np.arange(0.1, 1.001, 0.1), 2)
-OUTDIR = os.path.join(SESSION, "fdrdur10to200_parts")
+OUTDIR = os.path.join(RESULTS, "fdrdur10to200_parts")
 
 
 def main():

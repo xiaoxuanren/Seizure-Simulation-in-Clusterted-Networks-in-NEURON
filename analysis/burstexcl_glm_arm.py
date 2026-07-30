@@ -44,6 +44,11 @@ import sparse_glm as sg  # noqa: E402
 from session_paths import resolve  # noqa: E402
 SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
                   os.environ.get("DATASET_STATE", "normal"))
+from session_paths import results_dir  # noqa: E402
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+RESULTS = results_dir(_S, _T, "ic_artifact")
+FIGS = RESULTS
 
 # --- shipped operating point (must match glm_labelfree_scaling.py exactly) ---
 BIN_MS, MAX_LAG, L2, KSUM = 5.0, 6, 2.0, 4
@@ -125,7 +130,7 @@ def sum4_W(Mn, bndn):
 
 def raw_spike_counts(drop):
     """True spike counts (not binarised) retained vs dropped, from the npz files."""
-    paths = [p for p in sorted(glob.glob(os.path.join(SESSION, "recording*.npz")))
+    paths = [p for p in sorted(glob.glob(os.path.join(RESULTS, "recording*.npz")))
              if "raster" not in os.path.basename(p)]
     total = kept = 0
     for p in paths:
@@ -227,9 +232,9 @@ def main():
         elapsed_s=time.time() - t0,
     )
 
-    out_json = os.path.join(SESSION, "burstexcl_%s_%s.json" % (a.arm, tag))
+    out_json = os.path.join(RESULTS, "burstexcl_%s_%s.json" % (a.arm, tag))
     json.dump(res, open(out_json, "w"), indent=2)
-    out_npz = os.path.join(SESSION, "burstexcl_%s_%s.npz" % (a.arm, tag))
+    out_npz = os.path.join(RESULTS, "burstexcl_%s_%s.npz" % (a.arm, tag))
     np.savez_compressed(out_npz, W=W.astype(np.float32), pred=pred, thr=thr,
                         se=se.astype(np.float32))
 

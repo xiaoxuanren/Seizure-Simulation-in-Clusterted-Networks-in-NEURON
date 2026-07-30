@@ -20,6 +20,11 @@ import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 from session_paths import resolve  # noqa: E402
 SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
                   os.environ.get("DATASET_STATE", "normal"))
+from session_paths import results_dir  # noqa: E402
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+RESULTS = results_dir(_S, _T, "glm")
+FIGS = results_dir(_S, _T, "figures")
 SIZES = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 BIN_MS, MAX_LAG, L2, KSUM = 5.0, 6, 2.0, 4
 TARGET_FDR, JITTER_MS, N_SURR, SEED = 0.70, 25.0, 8, 1
@@ -72,7 +77,7 @@ for n_rec in SIZES:
     print("  n=%3d (%3.0f min) thr=%.4f n_pred=%5d TP=%5d FP=%4d | P=%.3f R=%.3f F1=%.3f realFDR=%.3f | %.1fs"
           % (n_rec, n_rec * REC_MIN, thr, TP + FP, TP, FP, P, R, F1, rfdr, time.time() - tf), flush=True)
 
-out_json = os.path.join(SESSION, "glm_labelfree_scaling_metrics.json")
+out_json = os.path.join(RESULTS, "glm_labelfree_scaling_metrics.json")
 json.dump({"readout": "sum4", "target_fdr": TARGET_FDR, "jitter_ms": JITTER_MS,
            "n_surrogates": N_SURR, "n_true_exc": n_true_exc, "rows": rows},
           open(out_json, "w"), indent=2)
@@ -80,7 +85,7 @@ print("metrics -> %s" % out_json, flush=True)
 
 # oracle overlay (best-F1 / @10%FDR) from the earlier ground-truth sweep
 orc = None
-op = os.path.join(SESSION, "glm_scaling_metrics.json")
+op = os.path.join(RESULTS, "glm_scaling_metrics.json")
 if os.path.exists(op):
     orc = json.load(open(op))["rows"]
 
@@ -126,7 +131,7 @@ fig.suptitle("GLM sum4 @FDR0.70 (LABEL-FREE) \u2014 excitatory edge recovery vs 
              "threshold chosen from spike-jitter null (no ground truth); dashed = oracle upper bounds",
              fontsize=12, fontweight="bold")
 fig.tight_layout(rect=[0, 0, 1, 0.95])
-out_png = os.path.join(SESSION, "glm_labelfree_scaling_vs_duration.png")
+out_png = os.path.join(FIGS, "glm_labelfree_scaling_vs_duration.png")
 fig.savefig(out_png, dpi=130, facecolor="white", bbox_inches="tight")
 print("figure -> %s" % out_png, flush=True)
 print("TOTAL %.1fs" % (time.time() - t0), flush=True)

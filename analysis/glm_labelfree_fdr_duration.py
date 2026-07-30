@@ -18,6 +18,11 @@ import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 from session_paths import resolve  # noqa: E402
 SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
                   os.environ.get("DATASET_STATE", "normal"))
+from session_paths import results_dir  # noqa: E402
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+RESULTS = results_dir(_S, _T, "glm")
+FIGS = results_dir(_S, _T, "figures")
 SIZES = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 TARGETS = np.round(np.arange(0.1, 1.001, 0.1), 2)          # 0.1 .. 1.0
 BIN_MS, MAX_LAG, L2, KSUM = 5.0, 6, 2.0, 4
@@ -69,7 +74,7 @@ for si, n_rec in enumerate(SIZES):
 
 json.dump({"sizes": SIZES, "targets": TARGETS.tolist(), "n_true_exc": n_true,
            "grids": {k: v.tolist() for k, v in G.items()}},
-          open(os.path.join(SESSION, "glm_labelfree_fdr_duration_metrics.json"), "w"), indent=2)
+          open(os.path.join(RESULTS, "glm_labelfree_fdr_duration_metrics.json"), "w"), indent=2)
 
 # ---------------- figure ----------------
 x = np.array(SIZES, float)
@@ -111,7 +116,7 @@ fig.suptitle("GLM sum4 (LABEL-FREE) \u2014 recovery over target-FDR (0.1-1.0) \u
              "normal 100-rec flagship; threshold from spike-jitter null (no ground truth)",
              fontsize=13, fontweight="bold")
 fig.tight_layout(rect=[0, 0, 1, 0.95])
-out = os.path.join(SESSION, "glm_labelfree_fdr_duration.png")
+out = os.path.join(FIGS, "glm_labelfree_fdr_duration.png")
 fig.savefig(out, dpi=130, facecolor="white", bbox_inches="tight")
 print("figure -> %s" % out, flush=True)
 # quick text summary: target needed for realized 0.10 at each duration

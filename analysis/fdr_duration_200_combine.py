@@ -19,12 +19,17 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from burstexcl_glm_arm import SESSION  # noqa: E402
+from session_paths import results_dir  # noqa: E402
+_S = os.environ.get('DATASET_SESSION', 'IC-locked_flagship_200rec')
+_T = os.environ.get('DATASET_STATE', 'normal')
+RESULTS = results_dir(_S, _T, 'glm')
+FIGS = results_dir(_S, _T, 'figures')
 
 import matplotlib  # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-PARTS = os.path.join(SESSION, "fdrdur10to200_parts")
+PARTS = os.path.join(RESULTS, "fdrdur10to200_parts")
 
 
 def main():
@@ -47,7 +52,7 @@ def main():
 
     json.dump(dict(sizes=sizes, targets=targets, n_true_exc=n_true,
                    grids={k: v.tolist() for k, v in G.items()}),
-              open(os.path.join(SESSION, "fdrdur10to200_metrics.json"), "w"),
+              open(os.path.join(RESULTS, "fdrdur10to200_metrics.json"), "w"),
               indent=2)
 
     x = np.array(sizes, float)
@@ -91,7 +96,7 @@ def main():
                  "sits far below nominal at every duration", fontsize=12,
                  fontweight="bold")
     fig.tight_layout(rect=[0, 0, 1, 0.90])
-    p1 = os.path.join(SESSION, "fdrdur10to200_calibration.png")
+    p1 = os.path.join(FIGS, "fdrdur10to200_calibration.png")
     fig.savefig(p1, dpi=140, facecolor="white", bbox_inches="tight")
 
     # ---------- view 2: performance vs duration, per target ----------
@@ -116,7 +121,7 @@ def main():
     cb.set_label("nominal target FDR")
     fig.suptitle("Label-free recovery vs duration, one curve per nominal FDR "
                  "target (10-200 recordings)", fontsize=13, fontweight="bold")
-    p2 = os.path.join(SESSION, "fdrdur10to200_performance.png")
+    p2 = os.path.join(FIGS, "fdrdur10to200_performance.png")
     fig.savefig(p2, dpi=140, facecolor="white", bbox_inches="tight")
 
     # ---------- text summaries ----------

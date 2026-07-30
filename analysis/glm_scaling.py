@@ -25,6 +25,11 @@ import matplotlib.pyplot as plt
 from session_paths import resolve  # noqa: E402
 SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
                   os.environ.get("DATASET_STATE", "normal"))
+from session_paths import results_dir  # noqa: E402
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+RESULTS = results_dir(_S, _T, "glm")
+FIGS = results_dir(_S, _T, "figures")
 SIZES = [5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 BIN_MS, MAX_LAG, L2, KSUM = 5.0, 6, 2.0, 4          # sum4 = sum of lags 1..4
 REC_MIN = 1.0                                       # each recording = 60 s = 1 min
@@ -94,7 +99,7 @@ for n_rec in SIZES:
              fdr10["R"], tp_90, time.time() - tf), flush=True)
 
 # ---- persist metrics ----
-out_json = os.path.join(SESSION, "glm_scaling_metrics.json")
+out_json = os.path.join(RESULTS, "glm_scaling_metrics.json")
 with open(out_json, "w") as fh:
     json.dump({"session": SESSION, "readout": "sum4", "bin_ms": BIN_MS, "max_lag": MAX_LAG,
                "l2": L2, "n_true_exc": n_true_exc, "n_true_inh": n_true_inh, "rows": rows},
@@ -159,7 +164,7 @@ fig.suptitle("GLM (sum4) excitatory edge recovery vs recording duration\n"
              "%s  |  N=%d, %d candidate pairs, %d true exc edges"
              % (os.path.basename(SESSION), N, int(cand.sum()), n_true_exc), fontsize=12)
 fig.tight_layout(rect=[0, 0, 1, 0.96])
-out_png = os.path.join(SESSION, "glm_scaling_vs_duration.png")
+out_png = os.path.join(FIGS, "glm_scaling_vs_duration.png")
 fig.savefig(out_png, dpi=130, facecolor="white", bbox_inches="tight")
 print("figure -> %s" % out_png, flush=True)
 print("TOTAL %.1fs" % (time.time() - t0), flush=True)
