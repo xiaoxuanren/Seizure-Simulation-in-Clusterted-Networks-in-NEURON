@@ -17,8 +17,13 @@ Independent, reproducible, RE-SEEDABLE streams
 
 Documented role (a validated finding):
 
-* The noise is an *ignition seed*, not a driver. On its own -- with recurrent
-  synapses removed -- it makes each neuron fire only ~0.07 Hz.
+* The noise is an *ignition seed*, not a driver -- but it carries most of the
+  tonic rate. Measured with recurrent synapses removed (``exc_weight_scale =
+  inh_weight_scale = 0``, flagship topology and seeds, ``noise_weight = 0.007``,
+  15 x 60 s): **0.2355 Hz**, against the coupled network's 0.2789 Hz -- i.e. 84%
+  of tonic firing needs no connectivity at all. Recurrence supplies bursts and
+  temporal precision, not rate. (An earlier "~0.07 Hz" figure in this docstring
+  was unmeasured and derived at the older 0.0008 uS weight.)
 * Below a threshold noise level the network is silent; above it, recurrent
   excitation ignites synchronized network bursts.
 

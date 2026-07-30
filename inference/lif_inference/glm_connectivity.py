@@ -172,7 +172,8 @@ def _lagged_features(spike_matrix, boundaries, max_lag):
     return feats
 
 
-def glm_connectivity(spike_matrix, boundaries, max_lag=6, l2=2.0, readout="sum4"):
+def glm_connectivity(spike_matrix, boundaries, max_lag=6, l2=2.0, readout="sum4",
+                     return_B=False):
     """Signed direct-coupling matrix ``W[pre, post]`` via one lag-resolved ridge.
 
     Fits ``B[lag, pre, post]`` jointly across lags 1..``max_lag`` with a single
@@ -196,6 +197,10 @@ def glm_connectivity(spike_matrix, boundaries, max_lag=6, l2=2.0, readout="sum4"
 
     ``W[i, j] > 0`` excitatory coupling, ``< 0`` inhibitory. Self-coupling
     (diagonal) is zeroed. Score excitatory edges by ``+W``, inhibitory by ``-W``.
+
+    With ``return_B=True`` returns ``(W, B)`` where ``B`` is the full
+    ``[max_lag, pre, post]`` coefficient tensor, so a caller can build a
+    different reduction (e.g. :func:`typing_score`) without refitting.
     """
     n = spike_matrix.shape[0]
     F = _lagged_features(spike_matrix, boundaries, max_lag)          # [max_lag*N, T]
@@ -222,17 +227,79 @@ def glm_connectivity(spike_matrix, boundaries, max_lag=6, l2=2.0, readout="sum4"
         raise ValueError(
             f"readout must be 'lag1', 'sum', 'peak', or 'sum_k' (e.g. 'sum4'), got {readout!r}")
     np.fill_diagonal(W, 0.0)
-    return W
+    return (W, B) if return_B else W
 
 
-def infer_inhibitory(W):
+def typing_score(B, k=2):
+    """Neuron-level "inhibitory-ness" score from the first ``k`` lags.
+
+    ``-B[:k].sum(0).sum(1)``: sum the coefficient tensor over lags 1..k, sum over
+    postsynaptic targets to get each neuron's net outgoing weight, and negate so
+    that LARGER means more inhibitory.
+
+    ``k=2`` (lag1 + lag2) is the default because it beat lag1 alone on both
+    neuron typing (AUC 0.898 vs 0.890) and inhibitory edge ranking (AP 0.437 vs
+    0.325) on the flagship session. This is a *ranking* score only -- its
+    absolute scale carries no meaning, which is why :func:`infer_inhibitory`
+    cuts it by rank or against a surrogate null rather than at zero.
+    """
+    return -B[:k].sum(0).sum(1)
+
+
+def infer_inhibitory(W, score=None, typing="rank", fraction=0.25,
+                     null_scores=None, q=0.70):
     """Boolean ``[N]`` mask of inferred-inhibitory neurons (Dale, label-free).
 
-    A neuron is called inhibitory when its net signed outgoing weight is
-    negative. On the benchmarks this recovers true inhibitory neurons at
-    AUC ~0.86-0.91.
+    Three rules, selected by ``typing``:
+
+    * ``"sign"`` -- the original rule: net signed outgoing weight below zero
+      (``W.sum(1) < 0``). **Retained because it produced every shipped figure**,
+      but it is badly miscalibrated on this model: both populations have positive
+      median row-sums (excitatory +1.051, inhibitory +0.494), so zero sits in the
+      far tail of the pooled distribution rather than between the classes. It
+      fires on 4 of 926 neurons at n=100 and 1 at n=200, which collapses the
+      inhibitory candidate set and caps that layer at a handful of edges. The
+      *ranking* is fine (inhibitory AUC 0.960 / AP 0.459 at n=200); only the cut
+      is broken.
+    * ``"rank"`` (default) -- call the top ``round(fraction * N)`` neurons by
+      ``score`` inhibitory.
+
+      .. warning::
+         ``fraction`` is a **prior, not a measurement**. It encodes an assumed
+         inhibitory proportion (0.25 against a true 0.20 here) and is not
+         estimated from the data. Measured precision is flat at 0.47-0.50 across
+         ``fraction`` in {0.15, 0.20, 0.25, 0.30}, so the choice is not delicate,
+         but any result under this rule inherits the assumption.
+
+    * ``"null"`` -- fully label-free: cut ``score`` where a spike-jitter
+      surrogate null puts the FDR at ``q``. Carries no prior about the
+      inhibitory proportion; recovers fewer edges than ``"rank"``.
+
+    ``score`` comes from :func:`typing_score` and is required for ``"rank"`` and
+    ``"null"``. ``null_scores`` is ``[n_surrogates, N]`` surrogate typing scores,
+    required for ``"null"``.
     """
-    return W.sum(1) < 0.0
+    typing = str(typing).strip().lower()
+    if typing == "sign":
+        return W.sum(1) < 0.0
+    if score is None:
+        raise ValueError(
+            "typing=%r needs `score` from typing_score(B); pass "
+            "glm_connectivity(..., return_B=True)" % typing)
+    score = np.asarray(score, float)
+    if typing == "rank":
+        k = int(round(float(fraction) * len(score)))
+        k = max(0, min(k, len(score)))
+        mask = np.zeros(len(score), bool)
+        if k:
+            mask[np.argsort(score)[::-1][:k]] = True
+        return mask
+    if typing == "null":
+        if null_scores is None:
+            raise ValueError("typing='null' needs `null_scores` [n_surrogates, N]")
+        thr = _fdr_threshold(score, np.asarray(null_scores, float), q)
+        return (score >= thr) if np.isfinite(thr) else np.zeros(len(score), bool)
+    raise ValueError("typing must be 'sign', 'rank' or 'null', got %r" % typing)
 
 
 # --------------------------------------------------------------------------- #
@@ -297,6 +364,25 @@ def jitter_fdr_threshold(spike_matrix, boundaries, W, candidates, target_fdr=0.1
     return thr, pred
 
 
+def jitter_typing_null(spike_matrix, boundaries, jitter_bins=5, n_surrogates=8,
+                       max_lag=6, l2=2.0, typing_lags=2, seed=1):
+    """Surrogate ``[n_surrogates, N]`` typing scores for ``typing='null'``.
+
+    NOTE: this runs its OWN surrogate pass rather than sharing the one in
+    :func:`jitter_fdr_threshold`. That duplication is deliberate and temporary --
+    consolidating the surrogate passes is a separate change (A3), kept out of
+    this one so the typing fix can be measured without confounds.
+    """
+    rng = np.random.default_rng(seed)
+    out = []
+    for _ in range(n_surrogates):
+        _, Bs = glm_connectivity(
+            _jitter_matrix(spike_matrix, boundaries, jitter_bins, rng),
+            boundaries, max_lag=max_lag, l2=l2, readout="lag1", return_B=True)
+        out.append(typing_score(Bs, k=typing_lags))
+    return np.stack(out)
+
+
 # --------------------------------------------------------------------------- #
 # Candidates
 # --------------------------------------------------------------------------- #
@@ -320,18 +406,32 @@ def candidate_mask(n_neurons, positions=None, radius=None):
 # --------------------------------------------------------------------------- #
 def infer_connectivity(session_dir, bin_ms=5.0, max_lag=6, l2=2.0, readout="sum4",
                        target_fdr=0.1, jitter_ms=25.0, n_surrogates=8, radius=None,
-                       seed=1):
+                       seed=1, typing="rank", typing_fraction=0.25, typing_q=0.70,
+                       typing_lags=2):
     """Infer a directed, signed adjacency from spikes alone (label-free).
 
     Returns a dict with the signed weight ``W`` (per-edge peak), the inferred neuron
     types, the excitatory and type-constrained inhibitory predicted edge masks
     and their thresholds, the combined predicted adjacency, and metadata.
+
+    ``typing`` selects the E/I typing rule -- see :func:`infer_inhibitory`.
+    Default ``"rank"``; pass ``"sign"`` to reproduce the shipped figures. Only the
+    INHIBITORY layer depends on it; the excitatory layer is bit-identical across
+    all three rules.
     """
     s = load_spikes(session_dir)
     n = s["n_neurons"]
     M, bnd = build_spike_matrix(s["recordings"], n, bin_ms)
-    W = glm_connectivity(M, bnd, max_lag=max_lag, l2=l2, readout=readout)
-    inferred_inh = infer_inhibitory(W)
+    W, B = glm_connectivity(M, bnd, max_lag=max_lag, l2=l2, readout=readout,
+                            return_B=True)
+    jitter_bins_t = max(1, int(round(jitter_ms / bin_ms)))
+    tscore = typing_score(B, k=typing_lags)
+    tnull = (jitter_typing_null(M, bnd, jitter_bins_t, n_surrogates, max_lag, l2,
+                                typing_lags, seed)
+             if str(typing).strip().lower() == "null" else None)
+    inferred_inh = infer_inhibitory(W, score=tscore, typing=typing,
+                                    fraction=typing_fraction,
+                                    null_scores=tnull, q=typing_q)
 
     cand, radius = candidate_mask(n, s["positions"], radius)
     pre_inh = np.zeros((n, n), bool)
@@ -355,6 +455,9 @@ def infer_connectivity(session_dir, bin_ms=5.0, max_lag=6, l2=2.0, readout="sum4
         "pred_adjacency": pred_adjacency,
         "thr_exc": thr_exc, "thr_inh": thr_inh,
         "n_pred_exc": int(pred_exc.sum()), "n_pred_inh": int(pred_inh.sum()),
+        "typing_score": tscore,                    # [N] larger = more inhibitory
+        "typing": typing, "typing_fraction": typing_fraction,
+        "typing_q": typing_q, "typing_lags": typing_lags,
         "bin_ms": bin_ms, "max_lag": max_lag, "l2": l2, "readout": readout,
         "target_fdr": target_fdr, "jitter_ms": jitter_ms,
         "n_surrogates": n_surrogates, "candidate_radius": radius,

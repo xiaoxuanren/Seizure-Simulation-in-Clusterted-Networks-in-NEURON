@@ -168,10 +168,29 @@ python inference/adapter.py latest        # CCG + learned-LIF, reports AUC / FDR
   background. **This is the only drive** — no current injection, no stimulation,
   no tonic drivers. Each generator uses its own reproducible `Random123` stream.
 
+### Background noise: the single-event effect depends on adaptation state
+
+The flagship ran at noise_weight = 0.007 uS. Measured rheobase at zero
+adaptation is 0.000863 uS, so a single background event is strongly
+SUPRATHRESHOLD on a rested cell (dV +98.8 mV at 0.004 uS; it fires).
+
+RETRACTED: an earlier version of this file claimed a single noise event was
+subthreshold (~5.6 mV). That was true of the older 0.0008 uS weight only.
+
+At the network's actual operating point the picture reverses. Tonic sAHP load
+(~0.021 uS) holds V_rest at -84.6 mV and raises the adapted rheobase to
+0.01435 uS, so one event is 0.49x threshold -- dV +14.2 mV, no spike.
+
+The functional claim -- background drive integrates rather than detonating --
+therefore holds, but it is delivered by ADAPTATION, not by event amplitude.
+Cells are suprathreshold-sensitive only in the first ~1 s after finitialize,
+before sAHP loads.
+
 ### Tuned defaults (validated)
 
-The `build_network` defaults keep the **single background (noise) event
-subthreshold** so the network integrates rather than chain-reacting from noise:
+> These are the *registry* defaults, not the flagship run's values. The flagship
+> used `noise_weight = 0.007`, `exc_weight_scale = 2.0`, `inh_weight_scale = 2.5`.
+> See `MODEL_CHARACTERIZATION.md` for the measured operating point.
 
 | parameter | default | role |
 |-----------|---------|------|
@@ -182,8 +201,27 @@ subthreshold** so the network integrates rather than chain-reacting from noise:
 | `htau0_kA` | `20 ms` | fast A-current inactivation (crisp bursts) |
 | `tau_k` | `200 ms` (normal) | K⁺ clearance (seizure knob) |
 
-**Verified normal state:** mean rate **2.6 Hz**, network bursts (**93%
-participation**) at **1.5 Hz**, ~**77% of spikes in bursts**, [K⁺]ₒ ≈ 4.0–4.2 mM.
+### Network bursts
+
+RETRACTED: this file previously reported a network burst rate of 1.3-1.5 Hz and
+carried an honest-caveat that this was fast relative to dissociated cultures
+(~0.03 Hz). Both are wrong, and the caveat is wrong in the opposite direction.
+
+Measured over 200 recordings at the project's 0.35 participation gate:
+
+  spontaneous burst rate   0.0166 Hz over the full record
+                           0.0184 Hz over the eligible 6-60 s window
+  spikes in bursts         7.30% of all spikes (3.64% spontaneous-only)
+  burst time               0.177% of the record
+
+So the model is within 1.6-1.8x of the cited culture rate, and within 1.07x
+counting all 0.35-gate bursts. It does not have a fast-burst problem; if
+anything it is slightly slow.
+
+Note that bursts fall into two classes -- an initialization-locked event at
+4.60-5.34 s present in 137 of 336, and 199 genuinely spontaneous ones uniformly
+distributed over 8.63-59.85 s. The rates above are the spontaneous class. Full
+per-class statistics are pending.
 
 ### Recurrent coupling and the sharp HH threshold (honest caveat)
 
@@ -192,8 +230,8 @@ rheobase** (~`0.00085 µS` ≈ a 6 mV peak EPSP): a synaptic event is either
 **≤ 5.6 mV (subthreshold)** or triggers a **full ~101 mV spike** — there is no
 "moderately suprathreshold" middle. Consequently:
 
-- A single **noise** event (`0.0008 µS`) is subthreshold (~5.6 mV) — noise
-  integrates, it does not detonate.
+- A single **noise** event: the subthreshold claim that stood here has been
+  **retracted** — see "Background noise" above.
 - A single **recurrent** excitatory event, at any weight strong enough to sustain
   network bursts, is **suprathreshold** (fires the postsynaptic cell). We verified
   by sweep (density 0.04–0.12, `exc_tau` 3–6 ms, `noise_rate` 2–30 Hz, `tau_d`
@@ -337,11 +375,8 @@ recording files; spike times are in **milliseconds**. Inference-critical fields
 
 ## Honest caveats
 
-- **Burst rate is fast.** The verified normal regime bursts at ~1.3 Hz, far
-  faster than the ~0.03 Hz (tens of seconds between bursts) seen in real
-  dissociated cultures. The fast regime is convenient for generating many bursts
-  quickly for inference; slowing it toward culture-realistic spacing would need
-  weaker drive and stronger slow adaptation.
+- **Burst rate.** The "burst rate is fast" caveat that stood here has been
+  **retracted** — see "Network bursts" above and `MODEL_CHARACTERIZATION.md` §C.
 - **Reduced-A-current is not a faithful 4-AP model here.** The dramatic
   reduced-`gbar_kA` effect was specific to the dense discrete-hub topology; on the
   realistic log-normal topology it changes burst frequency in a
