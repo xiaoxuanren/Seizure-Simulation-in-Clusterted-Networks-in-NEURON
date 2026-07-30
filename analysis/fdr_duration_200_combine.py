@@ -55,6 +55,30 @@ def main():
               open(os.path.join(RESULTS, "fdrdur10to200_metrics.json"), "w"),
               indent=2)
 
+    # --- CSV exports: the grid, and the derived operating points -----------
+    cols = ["n_recordings", "minutes", "nominal_target_fdr", "realized_fdr",
+            "estimated_fdr", "threshold", "n_pred", "TP", "precision", "recall", "f1"]
+    lines = [",".join(cols)]
+    for si, n in enumerate(sizes):
+        for ti, t in enumerate(targets):
+            lines.append(",".join([str(n), str(n), "%.2f" % t] + [
+                "%.6g" % G[k][ti][si] for k in
+                ("realized_fdr", "estimated_fdr", "thr", "n_pred", "TP",
+                 "precision", "recall", "f1")]))
+    with open(os.path.join(RESULTS, "fdrdur10to200_grid.csv"), "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+
+    rf = np.array(G["realized_fdr"]); tgt = np.array(targets)
+    lines2 = ["n_recordings,target_for_realized_10pct,realized_at_that_target,"
+              "best_f1_target,best_f1"]
+    for si, n in enumerate(sizes):
+        j = int(np.nanargmin(np.abs(rf[:, si] - 0.10)))
+        b = int(np.nanargmax(np.array(G["f1"])[:, si]))
+        lines2.append("%d,%.2f,%.4f,%.2f,%.4f"
+                      % (n, tgt[j], rf[j, si], tgt[b], G["f1"][b][si]))
+    with open(os.path.join(RESULTS, "fdrdur10to200_operating_points.csv"), "w") as fh:
+        fh.write("\n".join(lines2) + "\n")
+
     x = np.array(sizes, float)
     tg = np.array(targets, float)
     dcol = plt.cm.plasma(np.linspace(0, 0.9, len(sizes)))

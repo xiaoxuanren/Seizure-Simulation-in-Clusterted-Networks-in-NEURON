@@ -139,16 +139,24 @@ def main():
                 print("      %s" % n)
         total += len(moves)
 
-        if not a.dry_run and moves:
+        if not a.dry_run:
             for src, dst, cat, name in moves:
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 if os.path.exists(dst):
                     print("  [skip] exists: %s" % dst)
                     continue
                 shutil.move(src, dst)
+            # index everything present, not just what moved this run
+            rroot = results_dir(a.session, state, create=False)
+            present = {}
+            if os.path.isdir(rroot):
+                for cat in sorted(os.listdir(rroot)):
+                    cp = os.path.join(rroot, cat)
+                    if os.path.isdir(cp):
+                        present[cat] = sorted(os.listdir(cp))
             rows = []
-            for cat in sorted(by_cat):
-                for n in sorted(by_cat[cat]):
+            for cat in sorted(present):
+                for n in present[cat]:
                     rows.append("| `%s/%s` | %s |" % (cat, n, describe(n)))
             idx = INDEX.format(session=a.session, state=state,
                                files="| file | description |\n|---|---|\n"
