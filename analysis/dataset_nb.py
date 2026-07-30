@@ -175,6 +175,17 @@ def preflight(cfg):
     print("")
     print("generate: %d recordings -> ~%.1f h with %d workers, ~%.2f GB"
           % (n, n * per_min / 60.0 / max(1, cfg["n_workers"]), cfg["n_workers"], gb))
+    try:                       # memory-aware sanity check on n_workers
+        sys.path.insert(0, REPO)
+        from neuron_simulation.parallel_dataset import pick_worker_count
+        safe, free_gb, cpu = pick_worker_count(max(n, 1), max_workers=None)
+        print("machine : %d cores, %.1f GB free -> at most ~%d workers is safe"
+              % (cpu, free_gb, safe))
+        if cfg["n_workers"] > safe:
+            print("          WARNING: n_workers=%d exceeds that; consider lowering it"
+                  % cfg["n_workers"])
+    except Exception:
+        pass
     if need_library:
         print("library : %d to build -> ~%.1f h (they run concurrently)"
               % (len(need_library),
@@ -281,3 +292,128 @@ def validate(cfg):
         print(r.stdout[-4000:])
         if r.returncode:
             print("STDERR:", r.stderr[-1500:])
+
+
+# --------------------------------------------------------------------------- #
+# inspection: the views neuron_network_simulation.ipynb shows
+# --------------------------------------------------------------------------- #
+def topology_report(cfg):
+    """4-panel graph overview + printed connectivity stats.
+
+    Spatial layout, hub fan-out, cluster-sorted connection matrix, out-degree
+    distribution. Run after build_topology; costs nothing to look at.
+    """
+    sys.path.insert(0, REPO)
+    import matplotlib.pyplot as plt
+    from neuron_simulation import plotting
+    with open(config_path(cfg), "rb") as fh:
+        topo = pickle.load(fh)["topology"]
+    stats, fig = plotting.topology_report(topo)
+    plt.show()
+    return stats
+
+
+def preview(cfg, duration_ms=20000.0, states=None):
+    """Short run per state -> raster + [K+]o, before committing hours.
+
+    Uses the same build parameters and the same total discard as the real
+    recordings, so the kept window is representative. This is a parameter check:
+    is the firing rate sane, is it bursting, does [K+]o move.
+    """
+    sys.path.insert(0, REPO)
+    import matplotlib.pyplot as plt
+    from neuron_simulation import analysis as _an, plotting, states as _st, workflows
+    with open(config_path(cfg), "rb") as fh:
+        topo = pickle.load(fh)["topology"]
+    n = topo["n_neurons"]
+    discard = cfg["sim"]["discard_transient_ms"] + cfg["discard_extra_ms"]
+    gate = float(cfg["sim"]["participation_threshold"])
+    out = {}
+    for state in (states or cfg["states_to_run"]):
+        bk = dict(cfg["build"])
+        bk["sahp_ainc_slow"] = float(cfg["states"][state])
+        print("running %.0f s preview of '%s' (sahp_ainc_slow=%.4f) ..."
+              % (duration_ms / 1000, state, bk["sahp_ainc_slow"]), flush=True)
+        r = workflows.run_single_state(
+            topo, state=_st.normal_state(), build_kwargs=bk,
+            duration=duration_ms, record_ko=True, dt=cfg["sim"]["dt"],
+            discard_transient_ms=discard, noise_seed=cfg["noise_seed_base"])
+        bursts = _an.detect_network_bursts(r["spike_data"], n, duration_ms,
+                                           participation_threshold=gate,
+                                           burn_in_ms=0.0)
+        st = _an.burst_statistics(bursts, duration_ms, burn_in_ms=0.0)
+        rate = _an.firing_rate_summary(r["spike_data"], duration_ms,
+                                       burn_in_ms=0.0)["mean_rate_hz"]
+        ko = r["ko_data"]["mean_ko"]
+        print("  %-8s firing %.3f Hz | bursts %d (%.3f Hz, participation %.2f) "
+              "| [K+]o %.2f-%.2f mM"
+              % (state, rate, st["n_bursts"], st["burst_rate_hz"],
+                 st["mean_participation"], float(ko.min()), float(ko.max())),
+              flush=True)
+        for rr, tag in ((False, "cluster-sorted"), (True, "randomized rows")):
+            plotting.plot_raster_with_ko(
+                r["spike_data"], n, duration_ms, r["ko_data"],
+                is_inhibitory=topo["neuron_is_inhibitory"],
+                cluster_assignments=topo["cluster_assignments"],
+                title="%s preview (sahp_ainc_slow=%.3f, %s)"
+                      % (state.upper(), bk["sahp_ainc_slow"], tag),
+                randomize_rows=rr)
+            plt.show()
+        out[state] = dict(rate_hz=rate, n_bursts=int(st["n_bursts"]),
+                          burst_rate_hz=float(st["burst_rate_hz"]),
+                          participation=float(st["mean_participation"]),
+                          ko_min=float(ko.min()), ko_max=float(ko.max()))
+    return out
+
+
+def knob_sweep(cfg, values=None, duration_ms=20000.0):
+    """Burst rate vs sahp_ainc_slow -- the graded seizure/normal transition."""
+    sys.path.insert(0, REPO)
+    import matplotlib.pyplot as plt
+    from neuron_simulation import analysis as _an, states as _st, workflows
+    with open(config_path(cfg), "rb") as fh:
+        topo = pickle.load(fh)["topology"]
+    n = topo["n_neurons"]
+    vals = sorted(values or set(cfg["states"].values()))
+    discard = cfg["sim"]["discard_transient_ms"] + cfg["discard_extra_ms"]
+    gate = float(cfg["sim"]["participation_threshold"])
+    rates, parts = [], []
+    for v in vals:
+        bk = dict(cfg["build"]); bk["sahp_ainc_slow"] = float(v)
+        r = workflows.run_single_state(
+            topo, state=_st.normal_state(), build_kwargs=bk,
+            duration=duration_ms, record_ko=False, dt=cfg["sim"]["dt"],
+            discard_transient_ms=discard, noise_seed=cfg["noise_seed_base"])
+        st = _an.burst_statistics(
+            _an.detect_network_bursts(r["spike_data"], n, duration_ms,
+                                      participation_threshold=gate, burn_in_ms=0.0),
+            duration_ms, burn_in_ms=0.0)
+        rates.append(st["burst_rate_hz"]); parts.append(st["mean_participation"])
+        print("  sahp_ainc_slow=%.4f -> burst rate %.3f Hz, participation %.2f"
+              % (v, st["burst_rate_hz"], st["mean_participation"]), flush=True)
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    ax.plot(vals, rates, "o-", color="#c0392b")
+    for v, rr in zip(vals, rates):
+        for nm, kv in cfg["states"].items():
+            if abs(kv - v) < 1e-12:
+                ax.annotate(nm, (v, rr), textcoords="offset points",
+                            xytext=(0, 8), ha="center", fontsize=9)
+    ax.set_xlabel("sahp_ainc_slow  (slow-AHP / M-current strength)")
+    ax.set_ylabel("burst rate (Hz)")
+    ax.set_title("Single knob: adaptation strength sets burst density\n"
+                 "(left = weak adaptation / more excitable)")
+    ax.invert_xaxis()
+    ax.grid(alpha=0.25)
+    plt.show()
+    return dict(values=list(vals), burst_rate_hz=rates, participation=parts)
+
+
+def show_rasters(cfg, n_each=2, shuffled=False):
+    """Display generated rasters inline, a few per state."""
+    from IPython.display import Image, display
+    for st in cfg["states_to_run"]:
+        pat = "recording*_raster%s.png" % ("_shuffled" if shuffled else "")
+        fs = sorted(glob.glob(os.path.join(out_dir(cfg, st), pat)))
+        print("%s: %d rasters, showing %d" % (st, len(fs), min(n_each, len(fs))))
+        for f in fs[:n_each]:
+            display(Image(filename=f))
