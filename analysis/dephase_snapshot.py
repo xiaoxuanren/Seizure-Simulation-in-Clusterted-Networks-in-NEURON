@@ -36,8 +36,15 @@ from neuron_simulation.network_builder import build_network  # noqa: E402
 
 FLAGSHIP_CFG = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal",
                             "20260721_163430", "_worker_config.pkl")
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                   "dephase_state_library.npz")
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+# The single knob (states.py): normal 0.01, seizure 0.004. Everything else is
+# identical between states.
+STATE_SAHP = {"normal": 0.01, "seizure": 0.004}
+
+
+def library_path(state):
+    return os.path.join(HERE, "dephase_state_library_%s.npz" % state)
 
 
 def capture(network):
@@ -67,18 +74,32 @@ def main():
     ap.add_argument("--recording-index", type=int, default=9000,
                     help="noise stream for the warm-up run; kept well away from "
                          "the indices used for real recordings")
+    ap.add_argument("--state", choices=sorted(STATE_SAHP), default="normal",
+                    help="which single-knob state to warm up. EACH STATE NEEDS "
+                         "ITS OWN LIBRARY: the stationary state of the seizure "
+                         "network differs from the normal one, so warm-starting "
+                         "seizure from normal snapshots would add a relaxation "
+                         "transient.")
+    ap.add_argument("--sahp-ainc-slow", type=float, default=None,
+                    help="override the state's knob value (uS)")
     a = ap.parse_args()
 
     cfg = pickle.load(open(FLAGSHIP_CFG, "rb"))
+    bk = dict(cfg["build_kwargs"])
+    knob = a.sahp_ainc_slow if a.sahp_ainc_slow is not None else STATE_SAHP[a.state]
+    bk["sahp_ainc_slow"] = float(knob)
+    OUT = library_path(a.state)
+    print("state '%s': sahp_ainc_slow = %.4f uS -> %s"
+          % (a.state, knob, os.path.basename(OUT)), flush=True)
     net = build_network(cfg["topology"], noise_seed=cfg["noise_seed_base"],
-                        report_deviations=False, **cfg["build_kwargs"])
+                        report_deviations=False, **bk)
     for g in net.noise:
         g.reseed(a.recording_index)
     print("warm-up network built: %d cells | snapshots at %s s"
           % (net.n_neurons, [t / 1000 for t in a.snapshots]), flush=True)
 
     h.dt = float(cfg["dt"])
-    h.celsius = float(cfg["build_kwargs"].get("celsius", h.celsius))
+    h.celsius = float(bk.get("celsius", h.celsius))
     h.finitialize(-65.0)
 
     lib, t0 = [], time.time()
@@ -97,6 +118,8 @@ def main():
     payload["snapshot_times_ms"] = np.asarray(sorted(a.snapshots), float)
     payload["warmup_duration_ms"] = float(a.duration)
     payload["warmup_recording_index"] = int(a.recording_index)
+    payload["state"] = a.state
+    payload["sahp_ainc_slow"] = float(knob)
     np.savez_compressed(OUT, **payload)
 
     gs = payload["g_slow"]
