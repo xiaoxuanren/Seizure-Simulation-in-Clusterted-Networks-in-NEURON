@@ -83,6 +83,11 @@ def main():
                          "transient.")
     ap.add_argument("--sahp-ainc-slow", type=float, default=None,
                     help="override the state's knob value (uS)")
+    ap.add_argument("--topology-pkl", type=str, default=None,
+                    help="worker-config pickle to take the topology from. "
+                         "Defaults to the flagship's, so the graph matches the "
+                         "200-recording dataset. A state library and the "
+                         "recordings that use it MUST share one topology.")
     ap.add_argument("--build-overrides", type=str, default=None,
                     help="JSON dict merged over the flagship build_kwargs, so a "
                          "notebook can own the build config. Topology is NOT "
@@ -93,7 +98,11 @@ def main():
                          "the flagship's value from the worker config.")
     a = ap.parse_args()
 
-    cfg = pickle.load(open(FLAGSHIP_CFG, "rb"))
+    cfg = pickle.load(open(a.topology_pkl or FLAGSHIP_CFG, "rb"))
+    if a.topology_pkl:
+        print("topology from %s (%d neurons, %d edges)"
+              % (os.path.basename(a.topology_pkl), cfg["topology"]["n_neurons"],
+                 len(cfg["topology"]["connections"])), flush=True)
     bk = dict(cfg["build_kwargs"])
     knob = a.sahp_ainc_slow if a.sahp_ainc_slow is not None else STATE_SAHP[a.state]
     if a.build_overrides:
