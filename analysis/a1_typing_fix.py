@@ -29,13 +29,17 @@ import numpy as np
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "inference"))   # lif_simulation lives here
 import sparse_glm as sg  # noqa: E402
 from inference.lif_inference.glm_connectivity import (  # noqa: E402
     infer_inhibitory, typing_score)
 
-SESSION = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal",
-                       "20260721_163430")
+# Dataset location. Override with the DATASET_SESSION / DATASET_STATE env
+# vars, or edit here. `python session_paths.py` lists what is available.
+from session_paths import resolve  # noqa: E402
+SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
+                  os.environ.get("DATASET_STATE", "normal"))
 BIN_MS, MAX_LAG, L2, KSUM = 5.0, 6, 2.0, 4
 TARGET_FDR, JITTER_MS, N_SURR, SEED = 0.70, 25.0, 8, 1
 JBINS = max(1, int(round(JITTER_MS / BIN_MS)))
