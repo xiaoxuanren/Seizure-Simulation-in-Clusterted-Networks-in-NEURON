@@ -316,8 +316,8 @@ def plot_raster_with_ko(
     """Plot a cluster-sorted raster with mean extracellular [K+]o(t) underneath.
 
     This is the seizure read-out: the bottom panel shows mean [K+]o across
-    neurons (with the min-max band). In the normal state [K+]o stays near 4 mM;
-    in a seizure state it accumulates into the ictal range (~8-12 mM).
+    neurons (with the min-max band). See the note above ``ax_k`` below for the
+    measured [K+]o range and why it does not reach the ictal band.
 
     Args:
         spike_data: Mapping from neuron id to spike times in milliseconds.
@@ -361,6 +361,21 @@ def plot_raster_with_ko(
     ax_r.set_ylim(-1, n_neurons)
 
     times = np.asarray(ko_data["times"], dtype=float)
+    # [K+]o axis: this model does NOT reach ictal extracellular potassium.
+    # The kdyn accumulation loop has gain ~ tau_k * epsilon, and tau_k is held at
+    # 200 ms, which makes it nearly inert by design. Measured range across the
+    # single-knob sweep is 3.99-4.26 mM (rest 4.0 mM); with the knob fully off it
+    # reaches only ~4.98 mM.
+    #
+    # This is deliberate. Two seizure mechanisms appear in the literature --
+    # adaptation loss and K+ clearance failure -- and this model isolates the first
+    # by pinning the second. sAHP is declared NONSPECIFIC_CURRENT with a private
+    # ek = -90 mV and no USEION, so its current never enters ik and cannot drive
+    # kdyn. Even counting it, the counterfactual is +0.135 mM (3.99 -> ~4.12) --
+    # still far from ictal, because tau_k is the binding constraint, not the
+    # declaration.
+    #
+    # For the K+-clearance route, use states.kclearance_seizure_state() (tau_k = 12000).
     ax_k.fill_between(times, ko_data["min_ko"], ko_data["max_ko"], color="#c0392b", alpha=0.2,
                       label="min-max across neurons")
     ax_k.plot(times, ko_data["mean_ko"], color="#c0392b", lw=1.2, label="mean [K+]o")

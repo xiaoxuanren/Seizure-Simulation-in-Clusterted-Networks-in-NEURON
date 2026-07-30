@@ -91,8 +91,14 @@ def run_simulation(
     if progress_every_ms:
         next_stop = float(progress_every_ms)
         while h.t < total_ms - 1e-9:
-            h.continuerun(min(next_stop, total_ms))
+            target = min(next_stop, total_ms)
+            h.continuerun(target)
             print(f"  t = {h.t:.0f} / {total_ms:.0f} ms")
+            # ``continuerun`` can land a hair below its target (fixed-step dt
+            # does not divide total_ms exactly), which left the loop spinning
+            # forever on a target it could no longer advance past.
+            if target >= total_ms - 1e-9:
+                break
             next_stop += float(progress_every_ms)
     else:
         h.continuerun(total_ms)
