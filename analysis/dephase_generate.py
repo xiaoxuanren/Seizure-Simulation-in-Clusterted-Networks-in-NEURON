@@ -18,6 +18,7 @@ Everything else matches the flagship: same topology, same build kwargs
 """
 
 import argparse
+import json
 import os
 import pickle
 import sys
@@ -29,17 +30,79 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
 from neuron import h  # noqa: E402
+from neuron_simulation import analysis  # noqa: E402
+from neuron_simulation.io import save_recording_data  # noqa: E402
 from neuron_simulation.network_builder import build_network  # noqa: E402
+from neuron_simulation.workflows import _bursts_to_windows  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FLAGSHIP_CFG = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal",
                             "20260721_163430", "_worker_config.pkl")
 LIBRARY = os.path.join(HERE, "dephase_state_library.npz")
-OUT_DIR = os.path.join(REPO, "notebooks", "NEURON data parallel",
-                       "dephased_ic")
+# save_recording_data joins SAVE_ROOT / SESSION_TAG, so the files land in
+# notebooks/NEURON data parallel/dephased_ic/ -- the same folder as the pilot.
+SAVE_ROOT = os.path.join(REPO, "notebooks", "NEURON data parallel")
+SESSION_TAG = "dephased_ic"
+OUT_DIR = os.path.join(SAVE_ROOT, SESSION_TAG)
 
 STATE_KEYS = ("v", "hh_m", "hh_h", "hh_n", "kA_m", "kA_h", "ko",
               "g_fast", "g_slow")
+
+
+def write_rasters(spike_data, n, duration_ms, topology, rec_idx, out_dir,
+                  sahp_ainc_slow=None, dot_size=20.0):
+    """Both raster variants, matching the flagship pipeline's output.
+
+    Returns ``(raster_path, raster_shuffled_path)``. Never raises -- a plotting
+    failure must not lose a recording that took ~70 minutes to produce.
+    """
+    paths = [None, None]
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from neuron_simulation import plotting
+        knob = "" if sahp_ainc_slow is None else "  (sahp_ainc_slow=%.3f)" % sahp_ainc_slow
+        for k, (shuffled, suffix) in enumerate(((False, "raster"),
+                                                (True, "raster_shuffled"))):
+            fig = plotting.plot_raster(
+                spike_data, n, duration_ms,
+                is_inhibitory=topology.get("neuron_is_inhibitory"),
+                cluster_assignments=topology["cluster_assignments"],
+                burn_in_ms=0.0,
+                title="recording %03d - dephased_ic%s%s"
+                      % (rec_idx, knob,
+                         " (randomized rows)" if shuffled else ""),
+                randomize_rows=shuffled, dot_size=dot_size,
+                show_burst_count=True)
+            fn = os.path.join(out_dir, "recording%03d_%s.png" % (rec_idx, suffix))
+            fig.savefig(fn, dpi=120, facecolor="white", bbox_inches="tight")
+            plt.close(fig)
+            paths[k] = fn
+    except Exception as exc:
+        print("  [warn] raster skipped for recording%03d: %s" % (rec_idx, exc),
+              flush=True)
+    return paths[0], paths[1]
+
+
+def write_summary(rec_idx, out_dir, rec_file, raster, raster_shuffled, stats,
+                  n_spikes, extra=None):
+    """``_summary_<NNN>.json``, matching the flagship pipeline's schema."""
+    payload = dict(index=int(rec_idx),
+                   file=os.path.relpath(rec_file, REPO) if rec_file else None,
+                   raster=os.path.relpath(raster, REPO) if raster else None,
+                   raster_shuffled=(os.path.relpath(raster_shuffled, REPO)
+                                    if raster_shuffled else None),
+                   success=True,
+                   n_bursts=int(stats["n_bursts"]),
+                   burst_rate_hz=float(stats["burst_rate_hz"]),
+                   mean_participation=float(stats["mean_participation"]),
+                   num_spikes=int(n_spikes))
+    if extra:
+        payload.update(extra)
+    p = os.path.join(out_dir, "_summary_%03d.json" % rec_idx)
+    json.dump(payload, open(p, "w"), indent=1)
+    return p
 
 
 def restore(network, lib, k):
@@ -126,34 +189,62 @@ def main():
         total = discard + a.duration
         h.continuerun(total)
 
-        spikes = np.empty(n, dtype=object)
-        n_sp = 0
+        spike_data, n_sp = {}, 0
         for gid, cell in enumerate(net.cells):
             t = np.asarray(cell.get_spike_times(), float)
             t = t[t >= discard] - discard
-            spikes[gid] = t
+            spike_data[gid] = t
             n_sp += t.size
 
-        payload = dict(spike_times=spikes, duration=int(a.duration),
-                       recording_index=r, n_neurons=n, snapshot_index=k,
-                       snapshot_time_ms=float(lib["snapshot_times_ms"][k]),
-                       init_mode="dephased_warmstart")
+        voltage_data = None
         if a.voltage != "none":
             tt = np.asarray(tvec)
             keep = tt >= discard
-            traces = np.array([np.asarray(v, np.float32)[keep] for v in vecs],
-                              dtype=np.float32)
-            payload.update(voltage_times=(tt[keep] - discard),
-                           voltage_traces=traces,
-                           voltage_gids=probe.astype(np.int32),
-                           voltage_mode=a.voltage,
-                           voltage_sample_rate=float(a.voltage_dt),
-                           voltage_units="mV")
-        np.savez_compressed(out, **payload)
+            voltage_data = dict(
+                sample_rate=float(a.voltage_dt),
+                times=(tt[keep] - discard).astype(np.float64),
+                traces=np.array([np.asarray(v, np.float32)[keep] for v in vecs],
+                                dtype=np.float32),
+                units="mV", storage_backend="inline_npz")
+
+        # Flagship-compatible payload: same save path, same field layout.
+        bursts = analysis.detect_network_bursts(
+            spike_data, n, a.duration,
+            participation_threshold=cfg["participation_threshold"], burn_in_ms=0.0)
+        bw, ibw = _bursts_to_windows(bursts, a.duration)
+        stats = analysis.burst_statistics(bursts, a.duration, burn_in_ms=0.0)
+
+        rec_file = save_recording_data(
+            spike_data, voltage_data, cfg["cluster_info"], r, SESSION_TAG,
+            SAVE_ROOT, target_freq=cfg["target_freq"], duration=int(a.duration),
+            burst_windows=bw, interburst_windows=ibw)
+
+        # Fields specific to this branch, appended without disturbing the layout.
+        with np.load(rec_file, allow_pickle=True) as z:
+            merged = {kk: z[kk] for kk in z.files}
+        merged.update(snapshot_index=k,
+                      snapshot_time_ms=float(lib["snapshot_times_ms"][k]),
+                      init_mode="dephased_warmstart",
+                      discard_transient_ms=discard,
+                      n_neurons=n)
+        if voltage_data is not None:
+            merged.update(voltage_gids=probe.astype(np.int32),
+                          voltage_mode=a.voltage)
+        np.savez_compressed(rec_file, **merged)
+
+        raster, raster_shuf = write_rasters(
+            spike_data, n, a.duration, cfg["topology"], r, OUT_DIR,
+            sahp_ainc_slow=cfg["build_kwargs"].get("sahp_ainc_slow"))
+        write_summary(r, OUT_DIR, rec_file, raster, raster_shuf, stats, n_sp,
+                      extra=dict(snapshot_index=k,
+                                 init_mode="dephased_warmstart",
+                                 discard_transient_ms=discard))
+
         print("  recording%03d: snapshot %d (t=%.0f s), %d spikes (%.4f Hz), "
-              "%.0f s wall" % (r, k, lib["snapshot_times_ms"][k] / 1000, n_sp,
-                               n_sp / (n * a.duration / 1000.0),
-                               time.time() - t0), flush=True)
+              "%d bursts, %.0f s wall"
+              % (r, k, lib["snapshot_times_ms"][k] / 1000, n_sp,
+                 n_sp / (n * a.duration / 1000.0), int(stats["n_bursts"]),
+                 time.time() - t0), flush=True)
         del vecs, tvec
 
 
