@@ -30,7 +30,7 @@ _S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
 _T = os.environ.get("DATASET_STATE", "normal")
 RESULTS = results_dir(_S, _T, "glm")
 FIGS = results_dir(_S, _T, "figures")
-SIZES = [5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+SIZES = [5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100, 140, 200]
 BIN_MS, MAX_LAG, L2, KSUM = 5.0, 6, 2.0, 4          # sum4 = sum of lags 1..4
 REC_MIN = 1.0                                       # each recording = 60 s = 1 min
 PR_SNAPSHOTS = (10, 50, 100)

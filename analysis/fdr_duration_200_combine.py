@@ -80,33 +80,44 @@ def main():
         fh.write("\n".join(lines2) + "\n")
 
     x = np.array(sizes, float)
-    tg = np.array(targets, float)
+    tg_all = np.array(targets, float)
     dcol = plt.cm.plasma(np.linspace(0, 0.9, len(sizes)))
-    tcol = plt.cm.viridis(np.linspace(0, 1, len(targets)))
+
+    # Target 1.0 is degenerate: it admits every candidate pair, so realized FDR
+    # pins at the base rate (~0.986) regardless of duration and F1 collapses to
+    # ~0.03. Plotting it compresses the whole usable range, so it is excluded
+    # from the FIGURES only -- the CSV and JSON above keep every target.
+    pmask = ~np.isclose(tg_all, 1.0)
+    tg = tg_all[pmask]
+    ptargets = [t for t, keep in zip(targets, pmask) if keep]
+    P = {k: v[pmask] for k, v in G.items()}
+    tcol = plt.cm.viridis(np.linspace(0, 1, len(ptargets)))
+    trange = "%.1f-%.1f" % (min(ptargets), max(ptargets))
 
     # ---------- view 1: realized vs nominal, per duration ----------
     fig, ax = plt.subplots(1, 3, figsize=(16, 4.8))
     for si, n in enumerate(sizes):
-        ax[0].plot(tg, G["realized_fdr"][:, si], "-o", ms=3.5, lw=1.3,
+        ax[0].plot(tg, P["realized_fdr"][:, si], "-o", ms=3.5, lw=1.3,
                    color=dcol[si], label="%d rec" % n)
-    ax[0].plot([0, 1], [0, 1], "k--", lw=1, label="perfect calibration")
+    lim = max(tg.max(), P["realized_fdr"].max()) * 1.05
+    ax[0].plot([0, lim], [0, lim], "k--", lw=1, label="perfect calibration")
     ax[0].set_xlabel("nominal target FDR")
     ax[0].set_ylabel("realized FDR")
     ax[0].set_title("(a) realized vs nominal FDR, per duration")
     ax[0].legend(fontsize=7, ncol=2)
 
     for si, n in enumerate(sizes):
-        ax[1].plot(tg, G["realized_fdr"][:, si] - tg, "-o", ms=3.5, lw=1.3,
+        ax[1].plot(tg, P["realized_fdr"][:, si] - tg, "-o", ms=3.5, lw=1.3,
                    color=dcol[si])
     ax[1].axhline(0, color="k", ls="--", lw=1)
     ax[1].set_xlabel("nominal target FDR")
     ax[1].set_ylabel("realized - nominal")
     ax[1].set_title("(b) calibration error (negative = conservative)")
 
-    pm = ax[2].pcolormesh(x, tg, G["realized_fdr"], cmap="RdYlGn_r",
+    pm = ax[2].pcolormesh(x, tg, P["realized_fdr"], cmap="RdYlGn_r",
                           shading="nearest")
     fig.colorbar(pm, ax=ax[2], fraction=0.046, pad=0.04, label="realized FDR")
-    cs = ax[2].contour(x, tg, G["realized_fdr"], levels=[0.05, 0.10, 0.20],
+    cs = ax[2].contour(x, tg, P["realized_fdr"], levels=[0.05, 0.10, 0.20],
                        colors="k", linewidths=1.2)
     ax[2].clabel(cs, fontsize=8, fmt="%.2f")
     ax[2].set_xlabel("recordings (= minutes)")
@@ -115,9 +126,10 @@ def main():
 
     for a in ax:
         a.grid(alpha=0.25)
-    fig.suptitle("Label-free jitter-FDR calibration - sum4, 10-200 recordings x "
-                 "nominal target 0.1-1.0\nthe null is conservative: realized FDR "
-                 "sits far below nominal at every duration", fontsize=12,
+    fig.suptitle("Label-free jitter-FDR calibration - sum4, %d-%d recordings x "
+                 "nominal target %s\nthe null is conservative: realized FDR "
+                 "sits far below nominal at every duration"
+                 % (int(min(sizes)), int(max(sizes)), trange), fontsize=12,
                  fontweight="bold")
     fig.tight_layout(rect=[0, 0, 1, 0.90])
     p1 = os.path.join(FIGS, "fdrdur10to200_calibration.png")
@@ -129,8 +141,8 @@ def main():
               ("precision", "precision"), ("realized_fdr", "realized FDR"),
               ("TP", "true positives"), ("n_pred", "predicted edges")]
     for a, (k, title) in zip(ax.ravel(), panels):
-        for ti, t in enumerate(targets):
-            a.plot(x, G[k][ti], "-o", ms=3, lw=1.3, color=tcol[ti])
+        for ti, t in enumerate(ptargets):
+            a.plot(x, P[k][ti], "-o", ms=3, lw=1.3, color=tcol[ti])
         a.set_xlabel("recordings (= minutes)")
         a.set_ylabel(title)
         a.set_title(title + " vs duration")
@@ -139,7 +151,7 @@ def main():
     ax.ravel()[4].text(x[-1], n_true, " all true exc (%d)" % n_true,
                        fontsize=8, va="bottom", ha="right", color="gray")
     sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis,
-                               norm=plt.Normalize(min(targets), max(targets)))
+                               norm=plt.Normalize(min(ptargets), max(ptargets)))
     sm.set_array([])
     cb = fig.colorbar(sm, ax=ax, fraction=0.015, pad=0.01)
     cb.set_label("nominal target FDR")
