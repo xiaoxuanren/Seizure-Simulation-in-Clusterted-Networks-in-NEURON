@@ -29,6 +29,7 @@ DATASET_SESSION=IC-locked_flagship_200rec DATASET_STATE=normal python analysis/<
 | `figures/burstwindows_p035_starts.png` | burst windows recomputed at the 0.35 participation gate |
 | `figures/fdrdur10to200_calibration.png` | FDR target x duration grid, 10-200 recordings |
 | `figures/fdrdur10to200_performance.png` | FDR target x duration grid, 10-200 recordings |
+| `figures/glm_distance_recovery.png` |  |
 | `figures/glm_labelfree_fdr_duration.png` | FDR target x duration sweep (5-100 recordings) |
 | `figures/glm_labelfree_scaling_vs_duration.png` | sum4 @FDR0.70 edge recovery vs recording duration |
 | `figures/glm_scaling_vs_duration.png` | oracle upper bounds (best-F1, @10% FDR) vs duration |
