@@ -103,7 +103,7 @@ ORACLE upper bounds vs duration: best achievable F1, and recall at a true 10% FD
 
 The three largest clusters, one row each: spatial zoom with neurons labelled by global id, and the within-cluster adjacency submatrix.
 
-*Pipeline:* Same npz and operating point as glm_predicted_topology.png; this is a crop of it, not a re-fit. Only WITHIN-cluster pairs appear, so the precision and recall printed per cluster are local, not the global P=0.87 / R=0.85.
+*Pipeline:* Same npz and operating point as glm_predicted_topology.png; this is a crop of it, not a re-fit. Only WITHIN-cluster pairs appear, so the precision and recall printed per cluster are local, not the global P=0.87 / R=0.85. Inhibitory presynaptic ids are blue: the near-empty orange rows line up with them. Network-wide, 53 of the 54 neurons that lose their entire out-row are inhibitory (31.4% of inhibitory neurons vs 0.1% of excitatory), driven by the typing gate -- the 36 true inhibitory neurons the rank rule misses have recall 0 by construction.
 
 ### `glm_topology_zoom_cluster04.png`
 
@@ -111,7 +111,7 @@ The three largest clusters, one row each: spatial zoom with neurons labelled by 
 
 The three largest clusters, one row each: spatial zoom with neurons labelled by global id, and the within-cluster adjacency submatrix.
 
-*Pipeline:* Same npz and operating point as glm_predicted_topology.png; this is a crop of it, not a re-fit. Only WITHIN-cluster pairs appear, so the precision and recall printed per cluster are local, not the global P=0.87 / R=0.85.
+*Pipeline:* Same npz and operating point as glm_predicted_topology.png; this is a crop of it, not a re-fit. Only WITHIN-cluster pairs appear, so the precision and recall printed per cluster are local, not the global P=0.87 / R=0.85. Inhibitory presynaptic ids are blue: the near-empty orange rows line up with them. Network-wide, 53 of the 54 neurons that lose their entire out-row are inhibitory (31.4% of inhibitory neurons vs 0.1% of excitatory), driven by the typing gate -- the 36 true inhibitory neurons the rank rule misses have recall 0 by construction.
 
 ### `glm_topology_zoom_cluster35.png`
 
@@ -119,7 +119,7 @@ The three largest clusters, one row each: spatial zoom with neurons labelled by 
 
 The three largest clusters, one row each: spatial zoom with neurons labelled by global id, and the within-cluster adjacency submatrix.
 
-*Pipeline:* Same npz and operating point as glm_predicted_topology.png; this is a crop of it, not a re-fit. Only WITHIN-cluster pairs appear, so the precision and recall printed per cluster are local, not the global P=0.87 / R=0.85.
+*Pipeline:* Same npz and operating point as glm_predicted_topology.png; this is a crop of it, not a re-fit. Only WITHIN-cluster pairs appear, so the precision and recall printed per cluster are local, not the global P=0.87 / R=0.85. Inhibitory presynaptic ids are blue: the near-empty orange rows line up with them. Network-wide, 53 of the 54 neurons that lose their entire out-row are inhibitory (31.4% of inhibitory neurons vs 0.1% of excitatory), driven by the typing gate -- the 36 true inhibitory neurons the rank rule misses have recall 0 by construction.
 
 ### `glm_topology_zoom_combined.png`
 
@@ -127,7 +127,7 @@ The three largest clusters, one row each: spatial zoom with neurons labelled by 
 
 The three largest clusters, one row each: spatial zoom with neurons labelled by global id, and the within-cluster adjacency submatrix.
 
-*Pipeline:* Same npz and operating point as glm_predicted_topology.png; this is a crop of it, not a re-fit. Only WITHIN-cluster pairs appear, so the precision and recall printed per cluster are local, not the global P=0.87 / R=0.85.
+*Pipeline:* Same npz and operating point as glm_predicted_topology.png; this is a crop of it, not a re-fit. Only WITHIN-cluster pairs appear, so the precision and recall printed per cluster are local, not the global P=0.87 / R=0.85. Inhibitory presynaptic ids are blue: the near-empty orange rows line up with them. Network-wide, 53 of the 54 neurons that lose their entire out-row are inhibitory (31.4% of inhibitory neurons vs 0.1% of excitatory), driven by the typing gate -- the 36 true inhibitory neurons the rank rule misses have recall 0 by construction.
 
 ### `glm_topology_zoom_group1.png`
 

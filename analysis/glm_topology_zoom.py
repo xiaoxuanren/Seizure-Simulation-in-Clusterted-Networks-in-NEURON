@@ -4,16 +4,31 @@ The whole-network figure draws 13,356 edges over 926 neurons, so the neurons
 disappear under the lines. These zooms take one cluster at a time:
 
     left   spatial view of that cluster's neurons -- each one visible, excitatory
-           filled grey, inhibitory ringed -- with every edge that touches the
-           cluster drawn as TP / FP / FN
+           filled grey, inhibitory ringed -- with the WITHIN-cluster edges drawn
+           as TP / FP / FN
     right  the adjacency submatrix for the same neurons, one cell per pair, with
            the true edge outlined so hits and misses are countable by eye
 
-One PNG per cluster, plus a combined figure covering several clusters at once.
-Scores in each title are computed over the WITHIN-cluster pairs shown.
+Only pairs with BOTH endpoints in the cluster are shown; an edge from a cluster
+neuron to a neuron outside it is not drawn. Scores in each title are computed
+over those within-cluster pairs, so they are local and differ from the global
+P=0.87 / R=0.85. Use --group-size to put several adjacent clusters in one panel,
+which does show the between-cluster edges.
 
-    python glm_topology_zoom.py                    # 3 largest clusters
+Reading the rows: near-empty rows in these matrices are almost always inhibitory
+presynaptic neurons, so inhibitory ids are marked in blue. Measured on the n=200
+normal fit: 53 of the 54 neurons that lose their ENTIRE out-row are inhibitory --
+31.4% of inhibitory neurons versus 0.1% of excitatory ones. The cause is the
+typing gate rather than weak edges: the inhibitory candidate set only contains
+pairs whose presynaptic neuron was typed inhibitory, so all 36 true-inhibitory
+neurons that the rank rule missed have recall exactly 0 by construction (their
+negative weights cannot clear the excitatory threshold either). A further 17 were
+typed correctly and still lost every edge. Edge-level recall is 0.894 excitatory
+versus 0.565 inhibitory.
+
+    python glm_topology_zoom.py                    # 3 largest clusters + groups
     python glm_topology_zoom.py --clusters 4 2 35
+    python glm_topology_zoom.py --group-size 3 --n-groups 4
 """
 
 import argparse
@@ -42,7 +57,7 @@ SD = resolve(_S, _T)
 RESULTS = results_dir(_S, _T, "glm")
 FIGS = results_dir(_S, _T, "figures")
 
-GREEN, RED, ORANGE = "#1a9850", "#d73027", "#f0a000"
+GREEN, RED, ORANGE, BLUE = "#1a9850", "#d73027", "#f0a000", "#1f5fd0"
 
 
 def load():
@@ -120,8 +135,14 @@ def panels(d, ids, ax_sp, ax_mx, title_prefix, show_ids=True):
         ax_mx.set_yticks(range(n))
         ax_mx.set_xticklabels([str(g) for g in ids], fontsize=4.5, rotation=90)
         ax_mx.set_yticklabels([str(g) for g in ids], fontsize=4.5)
+        # inhibitory presynaptic ids in blue: rows that lose most or all of
+        # their edges are overwhelmingly these (see module docstring)
+        for t, g in zip(ax_mx.get_yticklabels(), ids):
+            if inh[g]:
+                t.set_color(BLUE)
+                t.set_fontweight("bold")
     ax_mx.set_xlabel("post")
-    ax_mx.set_ylabel("pre")
+    ax_mx.set_ylabel("pre  (blue id = inhibitory)")
     ax_mx.set_title("adjacency submatrix (black outline = a true edge)",
                     fontsize=10)
     return dict(n=len(ids), TP=TP, FP=FP, FN=FN, precision=Pr, recall=Rc)
@@ -190,8 +211,12 @@ def group_panels(d, clusters, ax_sp, ax_mx):
     ax_mx.set_yticks(mids)
     ax_mx.set_xticklabels(["c%d" % c for c in clusters], fontsize=9)
     ax_mx.set_yticklabels(["c%d" % c for c in clusters], fontsize=9)
+    # mark inhibitory presynaptic rows -- the sparse/empty rows line up with these
+    inh_rows = np.where(inh[ids])[0]
+    ax_mx.plot(np.full(len(inh_rows), -0.045 * len(ids)), inh_rows, "_",
+               color=BLUE, ms=5, mew=1.6, clip_on=False, zorder=6)
     ax_mx.set_xlabel("post")
-    ax_mx.set_ylabel("pre")
+    ax_mx.set_ylabel("pre   (blue ticks = inhibitory)")
     ax_mx.set_title("adjacency, blocks = clusters\n"
                     "diagonal blocks within-cluster, off-diagonal between",
                     fontsize=10)
