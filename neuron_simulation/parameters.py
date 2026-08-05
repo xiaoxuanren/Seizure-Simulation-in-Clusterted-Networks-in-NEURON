@@ -449,6 +449,12 @@ SYNCED_SIGNATURES = (
     ("neuron_simulation/simulation.py", "run_simulation", "sim"),
     ("neuron_simulation/workflows.py", "generate_dataset", "sim"),
     ("neuron_simulation/parallel_dataset.py", "generate_dataset_parallel", "sim"),
+    # A5/P1-5: these two drifted to a weak-AHP operating point (ainc_slow 0.001,
+    # tau_slow 2000) and made a reader take the wrong tau for the burst story.
+    # (Cell is the only class in neurons.py, so "__init__" is unambiguous to the
+    # AST walk used by verify_source_defaults.)
+    ("neuron_simulation/neurons.py", "__init__", "build"),
+    ("neuron_simulation/neurons.py", "build_cell", "build"),
 )
 
 
