@@ -154,11 +154,11 @@ class Cell:
         gbar_kA=None,
         spike_threshold=0.0,
         cluster_id=-1,
-        adapt=False,
-        sahp_ainc_fast=0.009,
-        sahp_tau_fast=200.0,
-        sahp_ainc_slow=0.001,
-        sahp_tau_slow=2000.0,
+        adapt=True,
+        sahp_ainc_fast=0.005,
+        sahp_tau_fast=300.0,
+        sahp_ainc_slow=0.01,
+        sahp_tau_slow=6500.0,
         sahp_ek=-90.0,
     ):
         self.gid = int(gid)
@@ -246,8 +246,8 @@ class Cell:
 
 
 def build_cell(gid, is_inhibitory=False, gbar_kA=None, cluster_id=-1, spike_threshold=0.0,
-               adapt=False, sahp_ainc_fast=0.003, sahp_tau_fast=200.0,
-               sahp_ainc_slow=0.001, sahp_tau_slow=2000.0, sahp_ek=-90.0):
+               adapt=True, sahp_ainc_fast=0.005, sahp_tau_fast=300.0,
+               sahp_ainc_slow=0.01, sahp_tau_slow=6500.0, sahp_ek=-90.0):
     """Construct one HH + A-current cell (thin wrapper over :class:`Cell`).
 
     Args:

@@ -35,8 +35,10 @@ Why two timescales
     reasonable time constants.
 
 Parameters
-    ainc_fast, tau_fast   fast SFA increment (uS) and decay (ms, ~100-300).
-    ainc_slow, tau_slow   slow AHP increment (uS) and decay (ms, ~1000-4000).
+    ainc_fast, tau_fast   fast SFA increment (uS) and decay (ms). Literature
+                          I_M runs tens of ms; this model uses 300 ms.
+    ainc_slow, tau_slow   slow AHP increment (uS) and decay (ms). Measured
+                          I_sAHP is 1-5 s; this model uses 6500 ms.
     ek                    K+ reversal (mV, ~ -90).
 
 Driven by a self-NetCon from the cell's own soma voltage (one per cell).
@@ -74,11 +76,15 @@ UNITS {
     (uS) = (microsiemens)
 }
 
+: These defaults are the CANONICAL operating point (neuron_simulation/parameters.py).
+: They are overwritten at instantiation by neurons.py, so changing them alters no
+: existing result -- they are kept in sync only so a reader of this file cannot
+: come away with the wrong tau_slow. Recompile (nrnivmodl) after editing.
 PARAMETER {
-    ainc_fast = 0.003 (uS)
-    tau_fast  = 200   (ms)
-    ainc_slow = 0.001 (uS)
-    tau_slow  = 2000  (ms)
+    ainc_fast = 0.005 (uS)
+    tau_fast  = 300   (ms)
+    ainc_slow = 0.01  (uS)
+    tau_slow  = 6500  (ms)
     ek        = -90   (mV)
 }
 
