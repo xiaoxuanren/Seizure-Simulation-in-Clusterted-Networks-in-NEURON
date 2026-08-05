@@ -383,10 +383,87 @@ than an order of magnitude.
 **Cost.** Two synapse parameters sit outside the ranges their own file cites, and
 the file is not annotated to say so.
 
+### D.6 The seizure knob is the Ca²⁺-dependent sAHP, not Kv7/KCNQ
+
+`sahp_ainc_slow` was documented in `states.py` and `parameters.py` as the
+"slow-AHP / M-current (Kv7/KCNQ)" increment, and lowering it as "KCNQ2/3
+loss-of-function". That attribution is wrong, and `sAHP.mod` never made it — the
+mod file has always assigned Kv7 to the *fast* component.
+
+**The literature splits the AHP by timescale.**
+
+| component | timescale | carrier | this model |
+|---|---|---|---|
+| mAHP | 50–100 ms | Kv7/KCNQ (I_M) + SK | `sahp_ainc_fast`, τ 300 ms — **held fixed** |
+| sAHP | 1–5 s (I_sAHP τ ≈ 2.9 s) | Ca²⁺-dependent KCa, likely KCa3.1 | `sahp_ainc_slow`, τ 6500 ms — **the knob** |
+
+Kv7/M channels activate subthreshold from about −60 mV with gating on tens of
+milliseconds and do not inactivate; they cannot produce a 6.5 s decay. The
+Ca²⁺-dependent sAHP survives apamin, XE-991 (Kv7 block) and Cs⁺, which is the
+pharmacological separation. The one link between KCNQ and the sAHP —
+Tzingounis & Nicoll 2008, *PNAS* 105:19974 — is specific to dentate granule
+cells and is not the mainline story.
+
+**The corrected attribution is stronger, not weaker.** Reduced sAHP is an
+established *acquired*-epilepsy mechanism: in post-status-epilepticus
+hippocampus, principal neurons generate markedly more spikes per depolarization,
+and the main cause is sAHP suppression via PKA-mediated inhibition of KCa3.1
+(Tamir et al. 2017; Tiwari et al. 2019, *J Neurosci* 39:9914; CRF/CRF1R route,
+*J Neurosci* 42:5843, 2022; KCa3.1 in L5 neocortex, Roshchin et al. 2020,
+*Sci Rep* 10:14484). That is one reduced adaptation conductance on fixed wiring
+— exactly this experiment. KCNQ2/3 loss-of-function is a genetic neonatal
+syndrome acting mainly through the mAHP, i.e. through the parameter this project
+holds constant.
+
+**Recommended phrasing:** "an acquired-epilepsy adaptation deficit — reduced
+Ca²⁺-dependent sAHP, KCa3.1-like."
+
+### D.7 The adaptation model is linear, unsaturating, and temperature-inconsistent
+
+`sAHP.mod` is the textbook spike-triggered adaptation *conductance* — the
+conductance-based sibling of AdEx's `b` (Brette & Gerstner 2005), a special case
+of Benda & Herz's universal SFA model. The network-burst phenotype that follows
+is the expected one for this model class: coupled adaptive neurons with
+spike-driven adaptation form a relaxation oscillator, with the adaptation
+variable decaying through the quiescent phase until the network re-ignites
+(Frontiers Neurosci 12:41, 2018). §C's ~4.9 s ignition is that oscillator.
+
+Three consequences worth stating before the knob is cited as biophysical:
+
+1. **The load is unbounded in rate.** `g_ss = ainc · rate · τ` with no ceiling,
+   whereas the real I_sAHP saturates through a nonlinear Ca²⁺ sensor
+   (hippocalcin; Tzingounis et al. 2007, *Neuron* 53:487). This is why cutting
+   `ainc` 2.5× lowers the measured load only ~18% — rate rises 2.05× and nearly
+   compensates (§ Part-3 runs).
+2. **The conductance is large relative to the cell.** One spike adds 0.796
+   mS/cm² (0.01 µS over the 1256.6 µm² soma) = **2.65× the entire leak**
+   (`gl_hh` 0.3 mS/cm²); the 0.29 Hz steady state is 1.50 mS/cm² = **5× leak**.
+   That is why sAHP sets V_rest (§A) — a real sAHP modulates firing, it does not
+   set the resting potential.
+3. **Kinetics and temperature disagree.** `h.celsius = 6.3` (squid HH) and
+   `kA.mod` carries a `q10 = 3` `tadj`, but `sAHP.mod` and `kdyn.mod` have no
+   temperature scaling. Read as Q10 = 3 kinetics measured at 35 °C, τ_fast
+   300 ms ↔ ~13 ms (the real I_M range) and τ_slow 6500 ms ↔ ~278 ms. The two
+   timescales are coherent only if they are *not* temperature-corrected.
+
+**Why defensible.** None of this changes the experimental logic: one parameter
+moves, everything else is pinned, and the ground-truth wiring is exact. The
+model is a caricature of adaptation chosen to produce culture-like bursting,
+which it does.
+
+**Cost.** `ainc_slow` is µS *per spike*, not a channel density, so it bundles
+channel density, Ca²⁺ influx per spike and Ca²⁺ sensitivity into one number. A
+channelopathy would move only the first — "one knob = one channel" is a
+modelling convenience, not a literal mapping.
+
 ---
 
 ## Known documentation defects (see git history for fixes)
 
+- `states.py` and `parameters.py` attributed `sahp_ainc_slow` to the M-current
+  (Kv7/KCNQ) and called lowering it "KCNQ2/3 loss-of-function". By kinetics and
+  pharmacology the knob is the **Ca²⁺-dependent sAHP**; Kv7 belongs to
+  `sahp_ainc_fast`, which is held fixed. See §D.6.
 - `plotting.py` claimed [K⁺]ₒ "accumulates into the ictal range (~8–12 mM)".
   Measured max is **4.26 mM**. See §D.1.
 - `README.md` "Verified normal state" claimed mean rate 2.6 Hz, bursts at 1.5 Hz,
