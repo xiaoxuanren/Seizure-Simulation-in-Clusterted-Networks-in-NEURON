@@ -148,15 +148,20 @@ _WEIGHTS = [
 _BUILD = [
     # --- the seizure knob ---
     _p("sahp_ainc_slow", 0.01, "uS", "build",
-       "THE SEIZURE KNOB. Slow-AHP / M-current (Kv7/KCNQ) per-spike conductance increment. "
-       "Normal = 0.01; any LOWER value is a seizure state.",
+       "THE SEIZURE KNOB. Ca2+-dependent slow-AHP (KCa-type) per-spike conductance increment. "
+       "NOT the M-current -- that is sahp_ainc_fast. Normal = 0.01; any LOWER value is a seizure state.",
        "More slow adaptation -> lower firing rate, sparser bursts, longer inter-burst interval. "
-       "Lowering it models KCNQ2/3 loss-of-function (0.01 -> 0.29 Hz; 0.004 -> 0.63 Hz)."),
+       "Lowering it models an acquired-epilepsy sAHP deficit, KCa3.1-like "
+       "(0.01 -> 0.29 Hz; 0.004 -> 0.63 Hz). See states.py for the channel-identity argument."),
     _p("sahp_tau_slow", 6500.0, "ms", "build",
-       "Decay time constant of the slow AHP; sets the multi-second inter-burst interval.",
+       "Decay time constant of the slow AHP; sets the multi-second inter-burst interval. "
+       "NOTE: 6500 ms sits above both the measured I_sAHP range (1-5 s; ~2.9 s typical) and "
+       "sAHP.mod's own documented 1000-4000 ms -- a tuning choice, not a measured value.",
        "Longer-lasting adaptation -> longer inter-burst intervals, slower burst rate."),
     _p("sahp_ainc_fast", 0.005, "uS", "build",
-       "Fast spike-frequency-adaptation increment (held FIXED across normal/seizure).",
+       "Fast spike-frequency-adaptation increment -- the M-current / Kv7 (KCNQ2/3)-like "
+       "component, and so the one a KCNQ channelopathy would move. Held FIXED across "
+       "normal/seizure by design.",
        "Fewer spikes per burst (thinner bursts) without changing the inter-burst interval."),
     _p("sahp_tau_fast", 300.0, "ms", "build",
        "Decay time constant of the fast SFA component.",

@@ -1,8 +1,8 @@
 """Pharmacological / pathophysiological states.
 
-The seizure mechanism in this project is a **single knob**: the slow-AHP /
-M-current (Kv7/KCNQ) per-spike increment ``sahp_ainc_slow``. One fixed network,
-one parameter, two phenotypes:
+The seizure mechanism in this project is a **single knob**: the Ca2+-dependent
+slow-AHP per-spike increment ``sahp_ainc_slow``. One fixed network, one
+parameter, two phenotypes:
 
 * ``normal_state``  -> ``sahp_ainc_slow = 0.01`` (strong slow adaptation;
   quiet, sparse loose bursts; [K+]o stays ~4 mM). This value is PINNED: it is the
@@ -12,9 +12,31 @@ one parameter, two phenotypes:
   adaptation than normal", not as one blessed number -- pass whatever value you
   want. The default (0.004) is a convenience, not a commitment.
 
-Lowering the knob models KCNQ2/3 loss-of-function; raising it models a Kv7
-opener (retigabine). This is the **adaptation-deficit** seizure -- the
-mild-[K+]o bursting phenotype -- NOT the K+-clearance ictal route.
+CHANNEL IDENTITY -- read this before citing the knob in a talk or paper.
+``sahp_ainc_slow`` has ``tau_slow = 6500 ms``, which by both kinetics and
+pharmacology is the **Ca2+-dependent slow AHP** (a KCa conductance), NOT the
+M-current. The literature splits the AHP by timescale: the mAHP lasts 50-100 ms
+and carries the Kv7/KCNQ (M-current) component, whose gating runs on tens of
+milliseconds; the Ca2+-dependent sAHP lasts 1-5 s (measured I_sAHP decay
+tau ~2.9 s) and survives apamin, XE-991 (Kv7 block) and Cs+. In this model that
+split maps onto the two components exactly as ``sAHP.mod`` documents them:
+``sahp_ainc_fast`` (tau 300 ms) is the M-current/Kv7-like term, and
+``sahp_ainc_slow`` is the Ca2+-dependent sAHP.
+
+So lowering the knob models an **acquired-epilepsy sAHP deficit** -- the
+KCa3.1-like reduction seen in post-status-epilepticus hippocampus, where
+suppression of the sAHP is the main cause of augmented spike output
+(Tamir et al. 2017; Tiwari et al. 2019 J Neurosci 39:9914; CRF/CRF1R route,
+J Neurosci 42:5843, 2022; KCa3.1 in L5 neocortex, Roshchin et al. 2020
+Sci Rep 10:14484). It does NOT model KCNQ2/3 loss-of-function: that is a genetic
+neonatal syndrome acting mainly through the mAHP, i.e. through
+``sahp_ainc_fast``, which this project holds FIXED. (Earlier revisions of this
+docstring said KCNQ2/3; that attribution was wrong. The one narrow link between
+KCNQ and the sAHP -- Tzingounis & Nicoll 2008 PNAS 105:19974 -- is specific to
+dentate granule cells and is not the mainline story.)
+
+Either way this is the **adaptation-deficit** seizure -- the mild-[K+]o bursting
+phenotype -- NOT the K+-clearance ictal route.
 
 Everything else is held FIXED across the two states, by design:
 
@@ -51,7 +73,9 @@ import numpy as np
 NORMAL_GBAR_KA_EXC = 0.006
 NORMAL_GBAR_KA_INH = 0.004
 
-#: THE SINGLE KNOB -- slow-AHP / M-current per-spike increment (uS).
+#: THE SINGLE KNOB -- Ca2+-dependent slow-AHP per-spike increment (uS).
+#: NOT the M-current: that is `sahp_ainc_fast` (tau 300 ms), held fixed.
+#: See the module docstring for the channel-identity argument.
 #: Normal is PINNED (it is what the shipped 50-min flagship was generated with).
 NORMAL_SAHP_SLOW = 0.01
 #: Only a DEFAULT for :func:`seizure_state`; any value below normal is a valid
@@ -118,11 +142,13 @@ def _state(sahp_ainc_slow, state_name):
 def seizure_state(sahp_ainc_slow=DEFAULT_SEIZURE_SAHP_SLOW):
     """Return build overrides for a seizure state: the SAME network, lower slow AHP.
 
-    Seizure here means only "less slow adaptation than normal" (KCNQ2/3 / Kv7
-    loss-of-function). There is no blessed seizure number -- pass whatever value
-    you want to study. Everything else (``tau_k``, ``sahp_ainc_fast``,
-    ``gbar_kA_*``) is identical to :func:`normal_state`, so any difference in the
-    resulting activity is attributable to this one parameter.
+    Seizure here means only "less slow adaptation than normal" -- a reduced
+    Ca2+-dependent sAHP, as seen in post-status-epilepticus hippocampus (see the
+    module docstring; this is NOT a Kv7/KCNQ manipulation). There is no blessed
+    seizure number -- pass whatever value you want to study. Everything else
+    (``tau_k``, ``sahp_ainc_fast``, ``gbar_kA_*``) is identical to
+    :func:`normal_state`, so any difference in the resulting activity is
+    attributable to this one parameter.
 
     Args:
         sahp_ainc_slow: The slow-AHP per-spike increment (uS) for this seizure
