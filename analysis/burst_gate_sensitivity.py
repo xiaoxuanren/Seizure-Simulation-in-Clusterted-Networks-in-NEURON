@@ -45,8 +45,12 @@ TOTAL_S = 200 * 60.0
 
 
 def main():
-    paths = [p for p in sorted(glob.glob(os.path.join(RESULTS, "recording*.npz")))
+    # recordings live in the DATA dir, not the results dir (they were the same
+    # directory before analysis output was split out)
+    paths = [p for p in sorted(glob.glob(os.path.join(SESSION, "recording*.npz")))
              if "raster" not in os.path.basename(p)]
+    if not paths:
+        raise SystemExit("no recordings under %s" % SESSION)
     part, dur, start, rec = [], [], [], []
     t0 = time.time()
     for i, p in enumerate(paths):

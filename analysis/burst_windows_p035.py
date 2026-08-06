@@ -55,8 +55,12 @@ LATER_FROM = 6000.0
 
 
 def main():
-    paths = [p for p in sorted(glob.glob(os.path.join(RESULTS, "recording*.npz")))
+    # recordings live in the DATA dir, not the results dir (they were the same
+    # directory before analysis output was split out)
+    paths = [p for p in sorted(glob.glob(os.path.join(SESSION, "recording*.npz")))
              if "raster" not in os.path.basename(p)]
+    if not paths:
+        raise SystemExit("no recordings under %s" % SESSION)
     print("recordings: %d | threshold %.2f | burn_in %.0f ms"
           % (len(paths), THRESH, BURN_IN), flush=True)
 
