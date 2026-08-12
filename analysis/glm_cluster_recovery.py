@@ -5,16 +5,24 @@ recall = TP / (true edges in that block). The diagonal is WITHIN-cluster
 recovery, off-diagonal is BETWEEN-cluster. Also summarizes within vs between
 recall/precision and shows recall vs block edge count.
 """
+import glob
 import os
+import sys
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SD = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal", "20260721_163430")
+sys.path.insert(0, os.path.join(REPO, "analysis"))
+from session_paths import resolve, results_dir
 
-res = np.load(os.path.join(SD, "glm_connectivity_sum4_5ms.npz"), allow_pickle=True)
+SESSION_NAME = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+STATE = os.environ.get("DATASET_STATE", "normal")
+SD = resolve(SESSION_NAME, STATE)
+
+res = np.load(os.path.join(results_dir(SESSION_NAME, STATE, "glm"),
+                           "glm_connectivity_sum4_5ms.npz"), allow_pickle=True)
 pred = res["pred_adjacency"].astype(bool)
 A_exc = res["A_exc"].astype(bool); A_inh = res["A_inh"].astype(bool)
 cand = res["candidates"].astype(bool)
@@ -24,7 +32,7 @@ true = (A_exc | A_inh) & off
 TP = pred & true
 FP = pred & ~true & cand
 
-net = np.load(os.path.join(SD, "network_20260721_163430.npz"), allow_pickle=True)
+net = np.load(sorted(glob.glob(os.path.join(SD, "network_*.npz")))[0], allow_pickle=True)
 clu = np.asarray(net["cluster_assignments"], int)
 K = int(clu.max()) + 1
 
@@ -111,6 +119,7 @@ fig.suptitle("GLM sum4 @FDR0.70 (label-free) \u2014 per-cluster edge recovery  |
              "within-cluster recall %.2f vs between-cluster recall %.2f" % (win_R, bet_R),
              fontsize=13, fontweight="bold")
 fig.tight_layout(rect=[0, 0, 1, 0.94])
-out = os.path.join(REPO, "figures", "glm_cluster_recovery_heatmap_sum4_100rec.png")
+out = os.path.join(results_dir(SESSION_NAME, STATE, "figures"),
+                   "glm_cluster_recovery_heatmap_sum4_100rec.png")
 fig.savefig(out, dpi=130, facecolor="white", bbox_inches="tight")
 print("figure -> %s" % out)

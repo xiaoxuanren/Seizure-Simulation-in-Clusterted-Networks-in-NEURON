@@ -5,14 +5,19 @@ Fig 2: connected-neuron traces + spike-triggered average (pre-spike -> post EPSP
        for excitatory pairs, IPSP for inhibitory pairs, flat for unconnected).
 """
 import os
+import sys
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SD = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal", "20260721_163430")
-FIGDIR = os.path.join(REPO, "figures")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from session_paths import resolve, results_dir  # noqa: E402
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+SD = resolve(_S, _T)
+FIGDIR = results_dir(_S, _T, "figures")
 
 d = np.load(os.path.join(SD, "recording000.npz"), allow_pickle=True)
 V = np.asarray(d["voltage_traces"], np.float32)          # [N, T] mV, 1 ms bins
