@@ -4,3 +4,8 @@
 *.py text
 *.md text
 *.ipynb text
+# CHTC files are consumed on Linux (bash/HTCondor/Apptainer): force LF in the
+# working tree so a Windows checkout copied to the submit node still runs.
+chtc/*.sh text eol=lf
+chtc/*.sub text eol=lf
+chtc/*.def text eol=lf
