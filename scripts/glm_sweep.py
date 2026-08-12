@@ -12,7 +12,7 @@ Two LABEL-FREE selection criteria are computed for each (bin_ms, max_lag, l2):
 Ground-truth connectivity is used ONLY for the final report and a transparency
 "oracle gap"; it NEVER enters selection.
 
-    python glm_sweep.py --session "<spikeonly session>" --folds 3
+    python scripts/glm_sweep.py --session "<spikeonly session>" --folds 3
 
 Robustness: results are checkpointed to --out after every (bin,max_lag) block, so
 a re-run resumes (skips completed configs). Each block is error-isolated (a config
@@ -27,7 +27,7 @@ import time
 import numpy as np
 import scipy.sparse as sp
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sparse_glm as sg  # noqa: E402
 
 
