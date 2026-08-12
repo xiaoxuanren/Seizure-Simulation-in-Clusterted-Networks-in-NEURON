@@ -25,6 +25,9 @@ def main():
     ap.add_argument("--done-root", default=None,
                     help="skip recordings whose recordingNNN.npz already exists "
                          "under <done-root>/<session>/")
+    ap.add_argument("--sessions", nargs="*", default=None,
+                    help="only these session names (e.g. sweep_c50_seed01) -- "
+                         "for staged waves under a small /staging quota")
     ap.add_argument("--no-tar", action="store_true")
     a = ap.parse_args()
 
@@ -41,10 +44,13 @@ def main():
             os.path.exists(os.path.join(a.done_root, session, state, nm))
             for nm in names)
 
+    only = set(a.sessions) if a.sessions else None
     lines, skipped = [], 0
     for group in sweep["groups"]:
         for seed in group["seeds"]:
             session = "%s_seed%02d" % (group["prefix"], seed)
+            if only is not None and session not in only:
+                continue
             for rec in range(int(group["n_recordings"])):
                 need = ["recording%03d.npz" % rec]
                 if rec == 0:

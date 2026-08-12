@@ -32,8 +32,13 @@ in every session's provenance either way.
 
 ## One-time setup (CHTC submit node)
 
-You need a CHTC account and a [/staging allocation](https://chtc.cs.wisc.edu/uw-research-computing/file-avail-largedata)
-(request ≥ 400 GB for this sweep).
+You need a CHTC account and a [/staging allocation](https://chtc.cs.wisc.edu/uw-research-computing/file-avail-largedata).
+**The default allocation (100 GB / 1,000 files) is NOT enough for the full
+sweep** — the 4,000 full-voltage recordings are ~308 GB and ~8,000 files.
+Request **≥ 400 GB and ≥ 10,000 files** (quota AND file cap) for the full run.
+Until the increase lands you can run staged waves of at most **two sessions at
+a time** (~15.4 GB + 402 files each): pass session names to `submit_all.sh`,
+download and clear staging between waves.
 
 ```bash
 # on the submit node
