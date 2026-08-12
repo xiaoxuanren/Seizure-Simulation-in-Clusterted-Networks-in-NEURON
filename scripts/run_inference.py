@@ -1,15 +1,13 @@
-"""One-off inference runner for a NEURON session (GLM + learned-LIF).
+"""Sparse-GLM connectivity-inference runner for a NEURON session.
 
 Usage:
-    python _run_inference.py env
-    python _run_inference.py glm  [--readout peak|lag1|sum] [--max-lag 6] [--bin-ms 5] [--edges]
-    python _run_inference.py lif  [--burst both|on|off] [--epochs 30] [--K 100] [--max-delay 5]
+    python scripts/run_inference.py --session <session_dir> env
+    python scripts/run_inference.py --session <session_dir> glm \
+        [--readout peak|lag1|sum|sum4] [--max-lag 6] [--bin-ms 5] [--edges]
 
 - Uses ALL recordings in the session (no cap).
 - GLM: one joint lag-resolved ridge fit, then reports per-lag AUC/AP to find the
   best lag (memory-frugal block-wise Gram assembly so all recordings fit).
-- LIF: adapter.run_inference (spike-only learned-LIF), run with and/or without
-  network-burst exclusion.
 """
 import argparse
 import glob
@@ -19,22 +17,9 @@ import time
 
 import numpy as np
 
-REPO = os.path.dirname(os.path.abspath(__file__))
-for _p in (REPO, os.path.join(REPO, "inference")):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
-DEFAULT_SESSION = os.path.join(
-    REPO, "notebooks", "NEURON data parallel",
-    "IC-locked_flagship_200rec", "normal"
-)
-
-
-def _f(x):
-    try:
-        return "%.3f" % float(x)
-    except (TypeError, ValueError):
-        return str(x)
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if REPO not in sys.path:
+    sys.path.insert(0, REPO)
 
 
 # --------------------------------------------------------------------------- #
@@ -48,21 +33,12 @@ def cmd_env(args):
             vm.total / 1e9, vm.available / 1e9, os.cpu_count()))
     except Exception as e:
         print("psutil unavailable (%s); CPU=%d" % (e, os.cpu_count()))
-    for m in ("numpy", "sklearn", "torch"):
+    for m in ("numpy", "sklearn"):
         try:
             mod = __import__(m)
             print("%-8s %s" % (m, getattr(mod, "__version__", "?")))
         except Exception as e:
             print("%-8s MISSING (%s)" % (m, e))
-    try:
-        import torch
-        print("CUDA available=%s  device_count=%d" % (
-            torch.cuda.is_available(), torch.cuda.device_count()))
-        if torch.cuda.is_available():
-            print("GPU: %s" % torch.cuda.get_device_name(0))
-        print("torch threads=%d" % torch.get_num_threads())
-    except Exception as e:
-        print("torch/cuda check failed: %s" % e)
 
     recs = sorted(glob.glob(os.path.join(args.session, "recording[0-9][0-9][0-9].npz")))
     print("session: %s" % args.session)
@@ -118,7 +94,7 @@ def fit_B_blockwise(M, boundaries, max_lag, l2):
 
 
 def cmd_glm(args):
-    from lif_inference import glm_connectivity as glm
+    import glm_connectivity as glm
     from sklearn.metrics import roc_auc_score, average_precision_score
 
     t0 = time.time()
@@ -191,57 +167,6 @@ def cmd_glm(args):
                   m.get("auc_neuron_type", float("nan"))))
 
 
-# --------------------------------------------------------------------------- #
-# Learned-LIF (all recordings), with / without burst exclusion
-# --------------------------------------------------------------------------- #
-def cmd_lif(args):
-    import json
-    import adapter
-
-    settings = []
-    if args.burst in ("both", "on"):
-        settings.append(True)
-    if args.burst in ("both", "off"):
-        settings.append(False)
-
-    results = {}
-    for excl in settings:
-        tag = "burst_excluded" if excl else "no_burst_exclusion"
-        print("\n" + "#" * 72)
-        print("# LIF (learned, spike-only) | ALL recordings | "
-              "exclude_detected_bursts=%s | K=%d epochs=%d max_delay=%d" % (
-                  excl, args.K, args.epochs, args.max_delay))
-        print("#" * 72, flush=True)
-        t0 = time.time()
-        summary = adapter.run_inference(
-            args.session, run_learned=True, run_ccg=False,
-            learned_params=dict(
-                K=args.K, n_epochs=args.epochs, max_delay=args.max_delay,
-                use_all_recordings=True, exclude_detected_bursts=excl,
-                connectivity_threshold_mode="oracle_f1"))
-        L = summary.get("learned") or {}
-        L["_seconds"] = time.time() - t0
-        results[tag] = L
-        print("\n[LIF %s] AUC=%s AP=%s F1=%s FDR=%.3f estFDR=%s | "
-              "inh-edge AUC=%s exc-edge AUC=%s | %.0fs" % (
-                  tag, _f(L.get("auc")), _f(L.get("ap")), _f(L.get("f1")),
-                  L.get("fdr", float("nan")), _f(L.get("estimated_fdr")),
-                  _f(L.get("auc_inhibitory")), _f(L.get("auc_excitatory")), L["_seconds"]),
-              flush=True)
-
-    out = os.path.join(args.session, "lif_burst_comparison.json")
-    with open(out, "w") as fh:
-        json.dump(results, fh, indent=2, default=str)
-    print("\n[LIF] comparison saved -> %s" % out)
-
-    if len(results) == 2:
-        print("\n=== LIF burst-exclusion comparison (all recordings) ===")
-        for tag, L in results.items():
-            print("  %-20s AUC=%s AP=%s F1=%s FDR=%.3f (%.0fs)" % (
-                tag, _f(L.get("auc")), _f(L.get("ap")), _f(L.get("f1")),
-                L.get("fdr", float("nan")), L.get("_seconds", float("nan"))))
-
-
 def _readout_arg(x):
     """Accept lag1, sum, peak, or sum_k / sumN (e.g. sum4)."""
     x2 = str(x).strip().lower()
@@ -254,8 +179,9 @@ def _readout_arg(x):
 
 
 def main():
-    p = argparse.ArgumentParser(description="GLM + learned-LIF inference on a NEURON session")
-    p.add_argument("--session", default=DEFAULT_SESSION)
+    p = argparse.ArgumentParser(description="Sparse-GLM connectivity inference on a NEURON session")
+    p.add_argument("--session", required=True,
+                   help="path to a session directory holding recording*.npz + network_*.npz")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     pe = sub.add_parser("env"); pe.set_defaults(func=cmd_env)
@@ -273,12 +199,6 @@ def main():
                     help="sweep target_fdr, report estimated vs realized FDR, then exit")
     pg.add_argument("--edges", action="store_true",
                     help="also run the label-free jitter-FDR edge prediction (heavier)")
-
-    pl = sub.add_parser("lif"); pl.set_defaults(func=cmd_lif)
-    pl.add_argument("--burst", choices=["both", "on", "off"], default="both")
-    pl.add_argument("--epochs", type=int, default=30)
-    pl.add_argument("--K", type=int, default=100)
-    pl.add_argument("--max-delay", type=int, default=5)
 
     args = p.parse_args()
     args.func(args)
