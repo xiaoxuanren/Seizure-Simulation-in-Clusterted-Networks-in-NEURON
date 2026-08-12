@@ -14,9 +14,10 @@ only in their default A-current density and in the sign of the synapses they
 spike detector so the simulator can read spike times without post-processing
 the voltage trace.
 
-The compiled mechanisms (``kA``, ``DepSyn``) must be built first with
-``nrnivmodl mechanisms`` -- see ``mechanisms/README.md``. Call
-:func:`load_mechanisms` once before constructing any cell.
+The compiled mechanisms (``kA``, ``kdyn``, ``DepSyn``, ``AmpaNmda``, ``sAHP``)
+must be built first with ``nrnivmodl mechanisms`` -- see
+``mechanisms/README.md``. Call :func:`load_mechanisms` once before constructing
+any cell.
 """
 
 import os
@@ -52,7 +53,8 @@ def _mechanism_available(name="kA"):
 
 
 def load_mechanisms(mechanisms_dir=None):
-    """Load the compiled ``kA``/``DepSyn`` mechanisms exactly once.
+    """Load the compiled mechanisms (``kA``, ``kdyn``, ``DepSyn``, ``AmpaNmda``,
+    ``sAHP``) exactly once.
 
     NEURON auto-loads a ``nrnmech.dll`` found in the current working directory,
     so this helper first checks whether the mechanisms are already registered

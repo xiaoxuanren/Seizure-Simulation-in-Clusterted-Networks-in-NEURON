@@ -6,9 +6,13 @@ measured here or traceable to a named script and run; where a number is a
 literature comparison it is marked as such, and where a claim could not be
 sourced it is left out rather than softened.
 
-Flagship configuration is the one that produced
-`notebooks/NEURON data parallel/normal/20260721_163430` (200 recordings × 60 s,
-926 neurons, 13 356 edges). Note it ran at **`noise_weight = 0.007 µS`**, not the
+Flagship configuration is the one that produced the
+`IC-locked_flagship_200rec` session (200 recordings × 60 s, 926 neurons,
+13 356 edges). The raw 200-recording data is not committed to this repo — only
+its `notebooks/NEURON data parallel/IC-locked_flagship_200rec/results/` tree is.
+The committed runnable subset is
+`notebooks/NEURON data parallel/IC-locked_flagship_spikeonly_50rec/normal`
+(50 spike-only recordings). Note the flagship ran at **`noise_weight = 0.007 µS`**, not the
 registry default of 0.004 — several older numbers in the repo were derived at
 0.004 and do not describe this dataset.
 
@@ -129,7 +133,7 @@ transmission is carried by a small minority of spikes:
 
 ### How a burst is measured, and what that costs
 
-`detect_network_bursts` ([analysis.py:64](neuron_simulation/analysis.py:64)) runs
+`detect_network_bursts` (`neuron_simulation/analysis.py` line 64) runs
 in two stages with two independent parameters, and **both** move the burst count.
 
 *Stage 1 — bracket.* Spikes are binned at `activity_bin_ms = 5`. A bin is "on"
