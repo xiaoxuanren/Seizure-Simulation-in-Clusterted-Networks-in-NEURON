@@ -22,6 +22,10 @@ neuron_simulation/mechanisms/mod_func.*
 neuron_simulation/mechanisms/.tmp*
 
 # --- Simulation output / data folders ---
+# New raw-data sessions are ignored by default; committing a dataset is a
+# deliberate act (git add -f). The pilot sessions under notebooks/"NEURON data"
+# and the named sessions under notebooks/"NEURON data parallel" were committed
+# that way and stay tracked (ignore rules never affect already-tracked files).
 NEURON data/
 NEURON_data/
 data/
@@ -33,6 +37,11 @@ voltage_augmented_learned_lif_outputs/
 ccg_outputs/
 correlation_outputs/
 inference_outputs/
+
+# --- Run logs (console captures; the historical ones live in archive/logs/) ---
+*.log
+*.err
+!archive/logs/*.log
 
 # --- Voltage sidecars & large artifacts ---
 *.h5
@@ -46,6 +55,13 @@ inference_outputs/
 # committed analysis figures live under <session>/results/<state>/figures/ and are
 # indexed by results/FIGURES.md -- keep them out of the blanket *.png rule
 !**/results/**/figures/*.png
+# cross-state comparison figures sit at the session results/ root (e.g.
+# compare_states_glm.png)
+!**/results/*.png
+# the curated root figures/ set (referenced by analysis/README.md) and the
+# archived historical renders
+!figures/*.png
+!archive/figures/*.png
 
 # --- OS / editor ---
 .DS_Store
