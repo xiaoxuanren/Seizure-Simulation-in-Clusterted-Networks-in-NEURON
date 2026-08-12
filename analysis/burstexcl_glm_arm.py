@@ -130,7 +130,7 @@ def sum4_W(Mn, bndn):
 
 def raw_spike_counts(drop):
     """True spike counts (not binarised) retained vs dropped, from the npz files."""
-    paths = [p for p in sorted(glob.glob(os.path.join(RESULTS, "recording*.npz")))
+    paths = [p for p in sorted(glob.glob(os.path.join(SESSION, "recording*.npz")))
              if "raster" not in os.path.basename(p)]
     total = kept = 0
     for p in paths:

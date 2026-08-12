@@ -6,13 +6,22 @@ during-burst (summation), against a chance baseline. Also estimates rest,
 threshold, single-EPSP amplitude -> how many summed EPSPs are needed.
 """
 import os
+import sys
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SD = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal", "20260721_163430")
+sys.path.insert(0, REPO)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Dataset location. Override with the DATASET_SESSION / DATASET_STATE env
+# vars, or edit here. `python session_paths.py` lists what is available.
+from session_paths import resolve, results_dir  # noqa: E402
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+SD = resolve(_S, _T)
 
 d = np.load(os.path.join(SD, "recording000.npz"), allow_pickle=True)
 V = np.asarray(d["voltage_traces"], np.float32)
@@ -102,6 +111,6 @@ fig.suptitle("Is one pre-spike enough to trigger a post-spike?  \u2014 recording
              "coincident inputs in a burst -> %.0f%%"
              % (100*p_ib, 100*p_base, 100*p_bu), fontsize=12, fontweight="bold")
 fig.tight_layout(rect=[0, 0, 1, 0.92])
-out = os.path.join(REPO, "figures", "spike_transmission_probability.png")
+out = os.path.join(results_dir(_S, _T, "figures"), "spike_transmission_probability.png")
 fig.savefig(out, dpi=130, facecolor="white", bbox_inches="tight")
 print("figure ->", out)

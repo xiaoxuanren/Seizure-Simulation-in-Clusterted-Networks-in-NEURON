@@ -23,11 +23,12 @@ sys.path.insert(0, REPO)
 
 from neuron_simulation.network_builder import build_network  # noqa: E402
 from neuron_simulation.simulation import run_simulation  # noqa: E402
+from session_paths import resolve, session_dir  # noqa: E402
 
-FLAGSHIP_CFG = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal",
-                            "20260721_163430", "_worker_config.pkl")
-OUT_DIR = os.path.join(REPO, "notebooks", "NEURON data parallel",
-                       "zeroedge_control_15rec")
+FLAGSHIP_CFG = os.path.join(resolve("IC-locked_flagship_200rec", "normal"),
+                            "_worker_config.pkl")
+OUT_DIR = os.path.join(session_dir("IC-locked_zeroedge_control_15rec"),
+                       "normal")
 
 
 def main():

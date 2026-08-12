@@ -6,7 +6,9 @@ Predicted-vs-true wiring from glm_connectivity_sum4_5ms.npz:
 Rebuilds the style of the old figures/glm_predicted_topology_labelfree_normal.png
 (which was a stale 236-neuron lag-1 run) for the 926-neuron flagship.
 """
+import glob
 import os
+import sys
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -14,9 +16,17 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SD = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal", "20260721_163430")
+sys.path.insert(0, REPO)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from session_paths import resolve, results_dir  # noqa: E402
 
-res = np.load(os.path.join(SD, "glm_connectivity_sum4_5ms.npz"), allow_pickle=True)
+_S = os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec")
+_T = os.environ.get("DATASET_STATE", "normal")
+SD = resolve(_S, _T)
+RESULTS = results_dir(_S, _T, "glm")
+FIGS = results_dir(_S, _T, "figures")
+
+res = np.load(os.path.join(RESULTS, "glm_connectivity_sum4_5ms.npz"), allow_pickle=True)
 W = res["W"]; pred = res["pred_adjacency"].astype(bool)
 A_exc = res["A_exc"].astype(bool); A_inh = res["A_inh"].astype(bool)
 cand = res["candidates"].astype(bool)
@@ -24,7 +34,7 @@ N = W.shape[0]
 off = ~np.eye(N, dtype=bool)
 true = (A_exc | A_inh) & off
 
-net = np.load(os.path.join(SD, "network_20260721_163430.npz"), allow_pickle=True)
+net = np.load(sorted(glob.glob(os.path.join(SD, "network_*.npz")))[0], allow_pickle=True)
 pos = np.asarray(net["neuron_positions"], float)
 clu = np.asarray(net["cluster_assignments"], int)
 is_inh = np.asarray(net["neuron_is_inhibitory"]).astype(bool)
@@ -79,7 +89,7 @@ fig.suptitle("GLM sum4 @FDR0.70 (label-free) \u2014 predicted vs true wiring, no
              "%d/%d edges recovered  (P=%.2f R=%.2f F1=%.2f)"
              % (tp, int(true.sum()), P, R, F1), fontsize=13, fontweight="bold")
 fig.tight_layout(rect=[0, 0, 1, 0.95])
-out = os.path.join(REPO, "figures", "glm_predicted_topology_labelfree_sum4_100rec.png")
+out = os.path.join(FIGS, "glm_predicted_topology_labelfree_sum4_100rec.png")
 fig.savefig(out, dpi=130, facecolor="white", bbox_inches="tight")
 print("TP=%d FP=%d FN=%d | P=%.3f R=%.3f F1=%.3f | true_edges=%d" % (tp, fp, fn, P, R, F1, int(true.sum())))
 print("figure -> %s" % out)

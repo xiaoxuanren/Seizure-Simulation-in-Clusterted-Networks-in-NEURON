@@ -26,10 +26,12 @@ from burstexcl_glm_arm import (BIN_MS, MAX_LAG, L2, KSUM, TARGET_FDR,  # noqa: E
                                JITTER_MS, N_SURR, SEED, JBINS,
                                fdr_threshold, sum4_W)
 
-ZERO = os.path.join(REPO, "notebooks", "NEURON data parallel",
-                    "zeroedge_control_15rec")
-FLAGSHIP = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal",
-                        "20260721_163430")
+# Dataset locations. Override with the DATASET_SESSION / DATASET_STATE env
+# vars, or edit here. `python session_paths.py` lists what is available.
+from session_paths import resolve  # noqa: E402
+ZERO = resolve(os.environ.get("DATASET_SESSION", "IC-locked_zeroedge_control_15rec"),
+               os.environ.get("DATASET_STATE", "normal"))
+FLAGSHIP = resolve("IC-locked_flagship_200rec", "normal")
 
 
 def run(session, n_rec, label, gt=None):

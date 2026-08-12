@@ -34,9 +34,11 @@ from matplotlib.lines import Line2D  # noqa: E402
 
 # Dataset location. Override with the DATASET_SESSION / DATASET_STATE env
 # vars, or edit here. `python session_paths.py` lists what is available.
-from session_paths import resolve  # noqa: E402
+from session_paths import resolve, results_dir  # noqa: E402
 SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
                   os.environ.get("DATASET_STATE", "normal"))
+BURSTS_DIR = results_dir(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
+                         os.environ.get("DATASET_STATE", "normal"), "bursts")
 IC_COLOR, SPO_COLOR = "#c0392b", "#1f5fd0"
 ONSET_FRAC = 0.05          # detector's onset_active_frac
 GATE = 0.35
@@ -190,7 +192,7 @@ def main():
     ap.add_argument("--recordings", type=int, nargs="+",
                     default=[0, 26, 35, 37, 53, 114])
     a = ap.parse_args()
-    B = np.load(os.path.join(SESSION, "burstwindows_p035.npz"), allow_pickle=True)
+    B = np.load(os.path.join(BURSTS_DIR, "burstwindows_p035.npz"), allow_pickle=True)
     here = os.path.dirname(os.path.abspath(__file__))
     overview(a.recordings, B, os.path.join(here, "burstmarked_rasters_overview.png"))
     zoom(a.recordings[:3], B, os.path.join(here, "burstmarked_rasters_zoom.png"))

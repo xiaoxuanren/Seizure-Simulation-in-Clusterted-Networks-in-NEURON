@@ -61,7 +61,7 @@ def main():
     ap.add_argument("--no-shuffled", action="store_true")
     ap.add_argument("--only-shuffled", action="store_true", help="render only the randomized-row raster")
     ap.add_argument("--burst-count", action="store_true", help="append (N network bursts) to title")
-    ap.add_argument("--repo", default=os.path.abspath(os.path.join(os.path.dirname(__file__))))
+    ap.add_argument("--repo", default=os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     args = ap.parse_args()
 
     # Make neuron_simulation importable (repo root that contains it).

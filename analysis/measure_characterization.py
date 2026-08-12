@@ -32,8 +32,12 @@ from neuron_simulation.neurons import build_cell, load_mechanisms  # noqa: E402
 from neuron_simulation.network_builder import build_network  # noqa: E402
 from neuron_simulation.simulation import run_simulation  # noqa: E402
 
-FLAGSHIP_CFG = os.path.join(REPO, "notebooks", "NEURON data parallel", "normal",
-                            "20260721_163430", "_worker_config.pkl")
+# Dataset location. Override with the DATASET_SESSION / DATASET_STATE env
+# vars, or edit here. `python session_paths.py` lists what is available.
+from session_paths import resolve  # noqa: E402
+SESSION = resolve(os.environ.get("DATASET_SESSION", "IC-locked_flagship_200rec"),
+                  os.environ.get("DATASET_STATE", "normal"))
+FLAGSHIP_CFG = os.path.join(SESSION, "_worker_config.pkl")
 AREA_CM2 = math.pi * (20e-4) * (20e-4)          # pi * diam * L, both 20 um
 NA_TO_MA_PER_CM2 = 1e-6 / AREA_CM2               # nA -> mA/cm2
 
