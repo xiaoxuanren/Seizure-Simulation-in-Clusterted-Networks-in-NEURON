@@ -212,6 +212,13 @@ def generate_dataset(
         topology["weight_params"],
         timestamp,
         save_dir,
+        provenance=dict(
+            topology_seed=topology_kwargs.get("seed"),
+            noise_seed_base=noise_seed_base,
+            num_clusters=topology_kwargs.get("num_clusters"),
+            space_size=topology_kwargs.get("space_size"),
+            topology_kind=topology_kind,
+            builder_params=topology_kwargs),
     )
 
     session_metadata = {
@@ -222,6 +229,8 @@ def generate_dataset(
         "recording_duration": recording_duration,
         "num_neurons": topology["n_neurons"],
         "num_connections": int(len(topology["connections"])),
+        "topology_seed": topology_kwargs.get("seed"),
+        "noise_seed_base": noise_seed_base,
         "topology_kind": topology_kind,
         "density": float(cluster_info.get("density", 0.0)),
         "target_freq": target_freq,

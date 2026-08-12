@@ -120,7 +120,8 @@ class LoadedRecording:
 # --------------------------------------------------------------------------- #
 # Save
 # --------------------------------------------------------------------------- #
-def save_network_structure(connections, neuron_positions, cluster_info, weight_params, timestamp, save_dir):
+def save_network_structure(connections, neuron_positions, cluster_info, weight_params, timestamp, save_dir,
+                           provenance=None):
     """Save ground-truth topology + spatial metadata (once per session).
 
     Replicates the LIF ``save_network_structure`` field layout and adds new
@@ -134,6 +135,12 @@ def save_network_structure(connections, neuron_positions, cluster_info, weight_p
         weight_params: The ``NeuronWeightParameters`` used (saved via ``vars``).
         timestamp: Session timestamp used to name the folder and file.
         save_dir: Root output directory for sessions.
+        provenance: Optional dict of generation provenance (e.g.
+            ``topology_seed``, ``noise_seed_base``, ``num_clusters``,
+            ``space_size``, ``builder_params``). Scalars are stored as new npz
+            fields; nested dicts are stored JSON-encoded under
+            ``<key>_json``. New fields only -- inference-critical fields are
+            never renamed.
 
     Returns:
         The path to the saved ``network_<timestamp>.npz`` file.
@@ -177,6 +184,21 @@ def save_network_structure(connections, neuron_positions, cluster_info, weight_p
         save_dict["hub_weight_scale"] = float(cluster_info.get("hub_weight_scale", 1.5))
         save_dict["hub_reciprocal_factor"] = float(cluster_info.get("hub_reciprocal_factor", 2.0))
         save_dict["n_hub_connections"] = int(cluster_info.get("n_hub_connections", 0))
+
+    # --- generation provenance (seeds + builder parameters; new fields only) ---
+    if provenance:
+        import json as _json
+        for key, val in provenance.items():
+            if val is None:
+                continue
+            if isinstance(val, dict):
+                save_dict[f"{key}_json"] = _json.dumps(val, default=str, sort_keys=True)
+            elif isinstance(val, (int, np.integer)):
+                save_dict[key] = int(val)
+            elif isinstance(val, (float, np.floating)):
+                save_dict[key] = float(val)
+            else:
+                save_dict[key] = str(val)
 
     np.savez_compressed(filename, **save_dict)
     print(f"Network structure saved to: {filename}")
