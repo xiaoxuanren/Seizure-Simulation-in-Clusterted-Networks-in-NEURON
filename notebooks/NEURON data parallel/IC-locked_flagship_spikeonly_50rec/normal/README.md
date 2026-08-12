@@ -1,7 +1,9 @@
-# Spike-only recordings — 20260721_163430 (normal, 926 neurons, 50 recordings)
+# Spike-only recordings — IC-locked_flagship_spikeonly_50rec (normal, 926 neurons, 50 recordings)
 
-Voltage-stripped copies of the 50 recordings in the sibling `20260721_163430/`
-session, created so the dataset fits within GitHub's file-size limits.
+Voltage-stripped copies of 50 recordings from the full 200-recording flagship
+session, `IC-locked_flagship_200rec` (whose raw data is not in this repo — only
+its `results/` tree is committed), created so the dataset fits within GitHub's
+file-size limits.
 
 - **Dropped:** `voltage_traces` and the `voltage_*` metadata — ~222 MB per recording
   (98% of each file).
@@ -12,11 +14,11 @@ session, created so the dataset fits within GitHub's file-size limits.
   plus `session_metadata.json`.
 - **Size:** ~14 MB total (vs 6.4 GB with voltage — a ~460× reduction).
 
-The inference pipeline runs unmodified on this directory, e.g.:
+The live inference pipeline (sparse GLM; the learned-LIF runner is retired to
+`archive/`) runs unmodified on this directory. `--session` is required, e.g.:
 
 ```
-python _run_lif_full.py --session "notebooks/NEURON data parallel/normal/20260721_163430_spikeonly"
-python _run_inference.py --session "notebooks/NEURON data parallel/normal/20260721_163430_spikeonly" glm --edges
+python scripts/run_inference.py --session "notebooks/NEURON data parallel/IC-locked_flagship_spikeonly_50rec/normal" glm --readout sum4
 ```
 
 The full voltage recordings are retained locally and are not in git; the

@@ -3,52 +3,76 @@
 A biophysical spiking-network model of spontaneous **network bursts** and their
 transition into a **seizure (ictal) state**, in a clustered culture built in
 [NEURON](https://neuron.yale.edu/). Single-compartment Hodgkin–Huxley neurons
-carry a custom **A-type / Kv4-like potassium current** (`kA`) and a **dynamic
-extracellular-potassium** mechanism (`kdyn`). The network is driven only by weak
-per-neuron Poisson background input and produces discrete, high-participation
-network bursts.
+carry a custom **A-type / Kv4-like potassium current** (`kA`), a **dynamic
+extracellular-potassium** mechanism (`kdyn`), and a **two-timescale
+spike-frequency-adaptation** mechanism (`sAHP`). The network is driven only by
+weak per-neuron Poisson background input and produces discrete,
+high-participation network bursts.
 
-**The seizure knob is impaired glial K⁺ clearance (`tau_k`), not a reduced
-A-current.** Firing raises [K⁺]ₒ → the K⁺ reversal E_K depolarizes (Nernst) →
-positive feedback toward an ictal state; glial/diffusive clearance is the
-negative feedback that terminates it. Weak clearance (large `tau_k`) is the
-epilepsy model. The old reduced-`gbar_kA` "4-AP" route is **deprecated to a
-phenomenological knob** (see below).
+**The seizure knob is a slow-AHP deficit (`sahp_ainc_slow`), not impaired K⁺
+clearance and not a reduced A-current.** `sahp_ainc_slow` is the Ca²⁺-dependent
+slow-AHP per-spike conductance increment (a KCa conductance, *not* the
+Kv7/M-current). Normal is **pinned at 0.01 µS**; any **lower** value is a
+seizure state (the default 0.004 is a convenience, not a commitment). This
+models an **acquired-epilepsy sAHP deficit** — the adaptation-deficit,
+mild-[K⁺]ₒ bursting phenotype. K⁺ clearance is **held fixed** at
+`tau_k = 200 ms`; the impaired-clearance route survives only as
+`kclearance_seizure_state` (the alternative high-[K⁺]ₒ ictal phenotype), and
+the reduced-`gbar_kA` "4-AP" route remains a **phenomenological knob** (see
+below).
 
 The project deliberately mirrors the companion **LIF project**
 ([LIF-Project](https://github.com/xiaoxuanren/LIF-Project),
-branch `chore/repo-cleanup`) in structure, naming, and — crucially — its saved
-**data format**, so the same connectivity-inference pipeline (CCG baseline +
-learned-LIF, spike-only and voltage-augmented) runs against NEURON output
-unmodified.
+branch `chore/repo-cleanup`) in its saved **data format**. The live
+connectivity-inference pipeline is now the in-repo **sparse GLM**
+(`sparse_glm.py` + `glm_connectivity.py`, driven by
+`scripts/run_inference.py`); the vendored CCG + learned-LIF pipeline is
+**retired** to `archive/inference/` (its results are preserved below as
+historical record).
 
 ---
 
 ## Repository layout
 
 ```
-neuron_simulation/
+neuron_simulation/          # the simulator package
   mechanisms/
-    kA.mod              # A-type K+ current (Kv4-like), fast htau (20 ms)
-    kdyn.mod            # dynamic [K+]o accumulation -> ek (the SEIZURE substrate)
-    DepSyn.mod          # depressing excitatory synapse (short-term depression)
-    README.md           # how to compile: `nrnivmodl mechanisms`
-  neurons.py            # single-compartment HH + kA + kdyn cell builders (E and I)
-  topology.py           # clustered+hub AND log-normal-degree builders
-  network_builder.py    # assemble a NEURON net from a topology (cells, synapses, NetCons, noise)
-  noise.py              # Poisson background (NetStim -> ExpSyn); per-recording Random123 streams
-  states.py             # normal vs seizure (tau_k) states; deprecated gbar_block knob
-  simulation.py         # run(): finitialize/continuerun, spike + optional voltage + [K+]o recording
-  workflows.py          # topology->network->run->save spikes + ground truth; dataset generation
-  analysis.py           # participation-based network-burst detection (post burn-in), burst stats
-  plotting.py           # raster, population activity, degree distribution, topology map, comparisons
-  io.py                 # save/load spikes, ground-truth connectivity, metadata (LIF-format)
-inference/
-  adapter.py            # load NEURON output -> run vendored CCG + learned-LIF -> AUC/FDR
-  lif_inference/        # VENDORED copy of the LIF inference package (see SOURCE.md)
+    kA.mod                  # A-type K+ current (Kv4-like), fast htau (20 ms)
+    kdyn.mod                # dynamic [K+]o accumulation -> ek (clearance route; tau_k held fixed)
+    sAHP.mod                # two-timescale adaptation: fast M-like + slow KCa (THE SEIZURE KNOB)
+    AmpaNmda.mod            # AMPA+NMDA excitatory synapse with depression (default exc model)
+    DepSyn.mod              # single-exponential depressing excitatory synapse (alternative)
+    README.md               # how to compile: `nrnivmodl mechanisms`
+  neurons.py                # single-compartment HH + kA + kdyn + sAHP cell builders (E and I)
+  topology.py               # clustered+hub AND log-normal-degree builders
+  network_builder.py        # assemble a NEURON net from a topology (cells, synapses, NetCons, noise)
+  noise.py                  # Poisson background; per-recording Random123 streams
+  states.py                 # normal vs seizure (sahp_ainc_slow); kclearance + gbar_block alternatives
+  parameters.py             # the parameter registry (single source of defaults)
+  simulation.py             # run(): finitialize/continuerun, spike + optional voltage + [K+]o recording
+  workflows.py              # topology->network->run->save spikes + ground truth; dataset generation
+  analysis.py               # participation-based network-burst detection, burst stats
+  plotting.py               # raster, population activity, degree distribution, topology map
+  io.py                     # save/load spikes, ground-truth connectivity, metadata (LIF-format)
+sparse_glm.py               # memory-efficient sparse lag-resolved ridge GLM (the live inference core)
+glm_connectivity.py         # GLM edge prediction / typing (extracted from the archived package)
+scripts/
+  run_inference.py          # GLM inference CLI (--session is required; no default)
+  glm_sweep.py              # GLM hyperparameter sweeps
+  verify_readout.py         # readout verification
+analysis/                   # ~40 standalone analysis/dataset scripts + session_paths.py (path registry)
 notebooks/
-  neuron_network_simulation.ipynb
-README.md
+  dataset_generation.ipynb            # CURRENT dataset driver (thin UI over analysis/dataset_nb.py)
+  neuron_network_simulation.ipynb     # original walkthrough (final inference cells now archived)
+  NEURON data parallel/               # committed sessions: <session>/<state>/recordingNNN.npz
+                                      #   + <session>/results/<state>/{glm,bursts,...}
+  NEURON data/                        # old sequential pilot sessions
+tests/
+  test_parameter_drift.py
+figures/                    # 6 curated PNGs (referenced from analysis/README.md)
+archive/                    # historical material incl. inference/ (retired learned-LIF/CCG pipeline);
+                            #   see archive/README.md for an item-by-item inventory
+README.md, MODEL_CHARACTERIZATION.md
 ```
 
 ---
@@ -57,8 +81,9 @@ README.md
 
 ### 1. Environment
 
-NEURON, NumPy, SciPy, Matplotlib, scikit-learn, h5py, and (for the learned-LIF
-inference) PyTorch:
+NEURON, NumPy, SciPy, Matplotlib, scikit-learn, h5py, and (only if you want to
+re-run the *archived* learned-LIF pipeline) PyTorch — the live GLM inference
+does not need torch:
 
 ```bash
 pip install neuron numpy scipy matplotlib scikit-learn h5py torch jupyterlab ipykernel
@@ -111,12 +136,16 @@ This produces `nrnmech.dll` (Windows) or an `x86_64/` build directory
 (Linux/macOS). See [`neuron_simulation/mechanisms/README.md`](neuron_simulation/mechanisms/README.md).
 `build_network(...)` calls `load_mechanisms()` for you.
 
-### 3. Run the notebook
+### 3. Run a notebook
 
-Open [`notebooks/neuron_network_simulation.ipynb`](notebooks/neuron_network_simulation.ipynb).
-It builds a log-normal topology, **verifies the network bursts in the normal
-state**, compares normal vs 4-AP, traces a dose-response curve, saves a dataset,
-and finally runs inference on the generated data.
+- [`notebooks/dataset_generation.ipynb`](notebooks/dataset_generation.ipynb) —
+  the **current dataset driver**: a thin UI over `analysis/dataset_nb.py` for
+  generating inference-ready sessions.
+- [`notebooks/neuron_network_simulation.ipynb`](notebooks/neuron_network_simulation.ipynb) —
+  the original end-to-end walkthrough (topology, normal-state bursts,
+  dose-response, dataset save). Its **final inference cells reference the
+  now-archived adapter and no longer run**; use `scripts/run_inference.py`
+  instead (step 4).
 
 ### 4. Or from Python
 
@@ -125,18 +154,21 @@ from neuron_simulation import topology, workflows, states
 
 topo = topology.build_topology_lognormal(seed=1)          # preferred builder
 
-# Normal vs seizure (the tuned defaults already give clean bursts):
-normal  = workflows.run_single_state(topo, state=states.normal_state())
-seizure = workflows.run_single_state(topo, state=states.seizure_state(1.0))
-print(normal["burst_stats"], normal["ko_data"]["mean_ko"].max())    # ~4 mM, discrete bursts
-print(seizure["ko_data"]["mean_ko"].max())                          # ~12 mM, ictal
+# Normal vs seizure: SAME network, one lower sahp_ainc_slow value.
+normal  = workflows.run_single_state(topo, state=states.normal_state())   # sahp_ainc_slow = 0.01
+seizure = workflows.run_single_state(topo, state=states.seizure_state())  # default 0.004; any value < 0.01
+# Lower knob -> more firing (0.29 -> 0.63 Hz on the 926-cell reference network);
+# [K+]o stays ~4 mM in BOTH states (this is the mild-[K+]o phenotype).
 
-# Generate an inference-ready dataset (normal state), then run inference:
+# Generate an inference-ready dataset (normal state):
 meta, session_dir = workflows.generate_dataset(n_recordings=3, recording_duration=15000)
 ```
 
+Then run the sparse-GLM inference against a session (`--session` is required
+and goes *before* the subcommand; quote paths — they contain spaces):
+
 ```bash
-python inference/adapter.py latest        # CCG + learned-LIF, reports AUC / FDR
+python scripts/run_inference.py --session "notebooks/NEURON data parallel/IC-locked_flagship_spikeonly_50rec/normal" glm --readout sum4
 ```
 
 ---
@@ -144,8 +176,11 @@ python inference/adapter.py latest        # CCG + learned-LIF, reports AUC / FDR
 ## The biophysics
 
 - **Neurons.** Single-compartment soma (`L = diam = 20 µm`) with NEURON's
-  built-in `hh` (Na⁺/K⁺/leak), the custom `kA` A-current, and the `kdyn` dynamic
-  [K⁺]ₒ mechanism. 80% excitatory, 20% inhibitory. `celsius` is configurable
+  built-in `hh` (Na⁺/K⁺/leak), the custom `kA` A-current, the `kdyn` dynamic
+  [K⁺]ₒ mechanism, and the `sAHP` two-timescale spike-frequency adaptation
+  (fast M-current/Kv7-like component, `tau 300 ms`, plus the slow
+  Ca²⁺-dependent KCa component, `tau 6500 ms` — the slow increment is the
+  seizure knob). 80% excitatory, 20% inhibitory. `celsius` is configurable
   (default **6.3 °C**, keeping squid `hh` kinetics); a mammalian variant at 34 °C
   runs with faster `kA` kinetics via a q10 factor.
 
@@ -157,12 +192,17 @@ python inference/adapter.py latest        # CCG + learned-LIF, reports AUC / FDR
 - **Dynamic [K⁺]ₒ (`kdyn.mod`).** `ek` is written from the Nernst equation on a
   state variable `[K⁺]ₒ` that rises with K⁺ efflux (firing) and is cleared with
   time constant `tau_k`. `ki = 72 mM` fixes resting E_K = −77 mV. **`tau_k` is
-  the seizure knob.**
+  held fixed at 200 ms** — it is the substrate of the *alternative*
+  high-[K⁺]ₒ ictal route (`kclearance_seizure_state`), not the project's
+  seizure knob.
 
-- **Synapses.** Excitatory synapses are `DepSyn` (short-term depression,
-  `d = 0.5`, `tau_d = 800 ms`) or static (`d = 0`). Inhibitory synapses are
-  `ExpSyn` with reversal −75 mV. Dale's law is enforced: a neuron's E/I identity
-  fixes the sign of every synapse it makes.
+- **Synapses.** The default excitatory synapse is `AmpaNmda` (fast AMPA,
+  `tau 5 ms`, plus slow NMDA, `tau 350 ms` at NMDA/AMPA ratio 3.0 — the NMDA
+  component carries burst reverberation), with Tsodyks–Markram short-term
+  depression (`d = 0.2`, `tau_d = 500 ms`). `DepSyn` (single fast exponential
+  with the same depression) is the alternative via `synapse_model="depsyn"`.
+  Inhibitory synapses are `ExpSyn` with reversal −75 mV. Dale's law is
+  enforced: a neuron's E/I identity fixes the sign of every synapse it makes.
 
 - **Drive.** Each neuron receives an independent Poisson `NetStim → ExpSyn`
   background. **This is the only drive** — no current injection, no stimulation,
@@ -188,18 +228,22 @@ before sAHP loads.
 
 ### Tuned defaults (validated)
 
-> These are the *registry* defaults, not the flagship run's values. The flagship
-> used `noise_weight = 0.007`, `exc_weight_scale = 2.0`, `inh_weight_scale = 2.5`.
-> See `MODEL_CHARACTERIZATION.md` for the measured operating point.
+> These are the *registry* defaults (`neuron_simulation/parameters.py`), not
+> necessarily the flagship run's values: the flagship used
+> `noise_weight = 0.007` (vs the registry 0.004); its `exc_weight_scale = 2.0`
+> and `inh_weight_scale = 2.5` match the registry. See
+> `MODEL_CHARACTERIZATION.md` for the measured operating point.
 
 | parameter | default | role |
 |-----------|---------|------|
-| `noise_weight` | `0.0008` µS | single noise EPSP ≈ 5.6 mV (subthreshold) |
-| `noise_rate` | `2.5` Hz | sparse ignition seed |
-| `exc_weight_scale` | `1.5` | recurrent gain |
-| `inh_weight_scale` | `1.5` | recurrent inhibition |
+| `sahp_ainc_slow` | `0.01` µS (normal, pinned) | **the seizure knob** — slow-AHP (KCa) per-spike increment; any lower value is a seizure |
+| `noise_weight` | `0.004` µS | single background event — suprathreshold on a rested cell, ~0.49× the adapted rheobase at the operating point (see above) |
+| `noise_rate` | `5.0` Hz | per-neuron Poisson background (the sole drive) |
+| `exc_weight_scale` | `2.0` | recurrent gain |
+| `inh_weight_scale` | `2.5` | recurrent inhibition |
+| `gbar_kA_exc` / `gbar_kA_inh` | `0.006` / `0.004` S/cm² | A-current density (identical across states) |
 | `htau0_kA` | `20 ms` | fast A-current inactivation (crisp bursts) |
-| `tau_k` | `200 ms` (normal) | K⁺ clearance (seizure knob) |
+| `tau_k` | `200 ms` (held fixed) | K⁺ clearance — **not** the seizure knob |
 
 ### Network bursts
 
@@ -241,38 +285,71 @@ rheobase** (~`0.00085 µS` ≈ a 6 mV peak EPSP): a synaptic event is either
   mutually exclusive** in this cell.
 
 The recurrent weights were nonetheless **reduced** from the earlier calibration
-(`exc_weight_scale` 4.0 → 1.5) to the minimum that still bursts. Making them fully
-subthreshold would require a better-integrating cell (e.g. a multi-compartment
-neuron), which is out of scope here.
+(`exc_weight_scale` 4.0 → 1.5 at the time of that sweep; the registry default
+has since settled at 2.0) to near the minimum that still bursts. Making them
+fully subthreshold would require a better-integrating cell (e.g. a
+multi-compartment neuron), which is out of scope here.
 
-### The seizure mechanism (K⁺ accumulation)
+### The seizure mechanism (slow-AHP deficit)
 
-Seizure is modelled by **impaired glial/diffusive K⁺ clearance**, not a reduced
-A-current:
+Seizure is modelled by a **single knob**: `sahp_ainc_slow`, the Ca²⁺-dependent
+slow-AHP per-spike conductance increment. One fixed network, one parameter, two
+phenotypes (authoritative source: the `neuron_simulation/states.py` module
+docstring):
 
-- **Normal** — `tau_k = 200 ms` (strong buffering). [K⁺]ₒ stays ~4 mM; the
-  network produces discrete bursts. `states.normal_state()`.
-- **Seizure** — large `tau_k` (e.g. `2500 ms`, impaired buffering). Firing-driven
-  [K⁺]ₒ accumulates, E_K depolarizes, and positive feedback drives an ictal
-  state. **Verified:** [K⁺]ₒ rises to **~12–14 mM**, firing ~**8 Hz**, discrete
-  bursts merge into sustained activity. `states.seizure_state(severity)`;
-  `states.seizure_dose_response()` sweeps `tau_k`.
-- **Deprecated `gbar_kA` route** — `states.gbar_block_state` (alias
-  `four_ap_state`) still reduces the A-current, but on the realistic log-normal
-  topology this does **not** faithfully reproduce seizure (the dramatic
-  reduced-A-current effect was specific to the dense discrete-hub topology). Kept
-  as a phenomenological option only.
+- **Normal** — `sahp_ainc_slow = 0.01` µS (strong slow adaptation; **pinned**:
+  it is what the shipped 50-minute flagship session was generated with). Quiet,
+  sparse loose bursts; [K⁺]ₒ stays ~4 mM. `states.normal_state()`.
+- **Seizure** — any **lower** `sahp_ainc_slow` (weak slow adaptation; more
+  firing, denser bursts). Seizure is defined as "less slow adaptation than
+  normal", not as one blessed number — the default `0.004` is a convenience.
+  Measured on the 926-cell seed-1 reference network (60 s): `0.010` → 0.29 Hz
+  firing, 8 loose bursts (0.13 Hz), participation 0.93; `0.004` → 0.63 Hz,
+  10 bursts (0.17 Hz), participation 1.00 — lower knob → more firing,
+  monotonically. `states.seizure_state(value)`;
+  `states.seizure_dose_response()` sweeps the knob.
+
+**Channel identity (mind this before citing the knob).** With
+`tau_slow = 6500 ms`, the knob is by both kinetics and pharmacology the
+**Ca²⁺-dependent slow AHP** (a KCa conductance), **not** the Kv7/KCNQ
+M-current — that is `sahp_ainc_fast` (`tau 300 ms`), which is **held fixed**
+across states. Lowering the knob therefore models an **acquired-epilepsy sAHP
+deficit** (the KCa3.1-like reduction seen in post-status-epilepticus
+hippocampus), *not* a KCNQ2/3 channelopathy. This is the
+**adaptation-deficit, mild-[K⁺]ₒ bursting** phenotype — not a high-[K⁺]ₒ
+ictal state.
+
+Everything else is held fixed across the two states by design: `tau_k = 200 ms`,
+`sahp_ainc_fast = 0.005`, `gbar_kA_exc/inh` — so any activity difference is
+attributable to the one parameter.
+
+Two alternative routes are **retained but are NOT the project's seizure model**:
+
+- **`states.kclearance_seizure_state(severity)`** — impaired glial/diffusive
+  K⁺ clearance: an elevated `tau_k` (reference impaired value `12000 ms`) lets
+  firing-driven [K⁺]ₒ accumulate, E_K depolarizes (Nernst), and positive
+  feedback drives a genuine **high-[K⁺]ₒ ictal state** rather than the
+  mild-[K⁺]ₒ bursting phenotype. Kept for comparison; it moves `tau_k`, so it
+  is not a single-knob state.
+- **`states.gbar_block_state`** (alias `four_ap_state`) — the reduced-A-current
+  "4-AP" knob. On the realistic log-normal topology this does **not**
+  faithfully reproduce seizure (the dramatic reduced-A-current effect was
+  specific to the dense discrete-hub topology). Phenomenological option only.
 
 ### Two bug fixes
 
 1. **Mis-calibrated weights → hyperexcitability.** Previously a single background
    event (`noise_weight = 0.0016 µS`) caused a ~103 mV deflection — one
    presynaptic spike was suprathreshold, so the network chain-reacted to
-   near-continuous firing and swamped the A-current. The **noise** weight is now
-   `0.0008 µS` (single noise EPSP ~5.6 mV, subthreshold), and the **recurrent**
-   gain was reduced (`exc_weight_scale` 4.0 → 1.5). See *Recurrent coupling and
-   the sharp HH threshold* above for why the recurrent EPSP remains suprathreshold
-   in any bursting regime (an intrinsic property of this HH point-neuron).
+   near-continuous firing and swamped the A-current. The fix at the time cut the
+   **noise** weight to `0.0008 µS` (single noise EPSP ~5.6 mV, subthreshold) and
+   reduced the **recurrent** gain (`exc_weight_scale` 4.0 → 1.5). Both were
+   later retuned upward — the registry now sits at `noise_weight = 0.004` and
+   `exc_weight_scale = 2.0` — with runaway prevented by sAHP adaptation rather
+   than event amplitude (see *Background noise* above). See *Recurrent coupling
+   and the sharp HH threshold* above for why the recurrent EPSP remains
+   suprathreshold in any bursting regime (an intrinsic property of this HH
+   point-neuron).
 2. **Per-recording noise seed had no effect → identical recordings.** The old
    `NetStim.seed()` path produced byte-identical recordings. Each generator now
    draws from a `Random123(base_seed, gid, recording_index)` stream via
@@ -311,25 +388,38 @@ bimodal (discrete-hub) contrast.
 
 ## Inference linkage
 
-The simulator writes each session in the **exact LIF layout**
+The **live pipeline is the in-repo sparse GLM**:
+
+- **`sparse_glm.py`** — a memory-efficient sparse **lag-resolved ridge GLM**
+  library (the inference core).
+- **`glm_connectivity.py`** — GLM **edge prediction / typing** on top of it.
+  (Extracted from the archived `inference/lif_inference/` package, where it
+  was a local addition of this project — it is *not* vendored LIF code.)
+- **`scripts/run_inference.py`** — the CLI driver (GLM only; the old `lif`
+  subcommand was removed, and `--session` is **required**, with no default).
+  The `analysis/` scripts run the same pipeline for the paper-style studies.
+
+```bash
+python scripts/run_inference.py --session "notebooks/NEURON data parallel/IC-locked_flagship_spikeonly_50rec/normal" glm --readout sum4
+```
+
+The simulator still writes each session in the **exact LIF layout**
 (`neuron_simulation/io.py` replicates `save_network_structure` /
-`save_recording_data`), so the vendored inference package
-(`inference/lif_inference/`, a verbatim copy of the LIF project's
-`lif_inference`) consumes it unmodified. `inference/adapter.py`:
+`save_recording_data`). The **ground truth is the exact wired graph** (the
+`connections` table). The first ~1 s startup transient is discarded at save
+time, so inference sees steady-state data. Optional downsampled voltage
+recording is still saved in the LIF-compatible format.
 
-1. **validates** the saved format (fields, shapes, dtypes),
-2. runs the **spike-only learned-LIF** model,
-3. runs the **training-free CCG baseline** on the same surfaced inputs, and
-4. reports **AUC** and **FDR** against the ground-truth wiring.
+### Historical results — the retired learned-LIF / CCG pipeline
 
-Optional downsampled voltage recording enables the **voltage-augmented**
-inference mode. The **ground truth is the exact wired graph** (the `connections`
-table). The first ~1 s startup transient is discarded at save time, so inference
-sees steady-state data.
+The vendored CCG + learned-LIF pipeline (and its `adapter.py`) is **retired**
+and lives at [`archive/inference/`](archive/inference/). The results below were
+produced by that pipeline before retirement and are kept as scientific record;
+they cannot be regenerated with the live GLM tooling.
 
-**Verified end-to-end** on the deliverable session (148 neurons, log-normal
-topology, **20×60 s** recordings, ~456k spikes), straight out of the vendored
-pipeline against the ground-truth wiring:
+**Verified end-to-end** on the then-deliverable session (148 neurons,
+log-normal topology, **20×60 s** recordings, ~456k spikes), straight out of the
+vendored pipeline against the ground-truth wiring:
 
 | model | AUC | notes |
 |-------|-----|-------|
@@ -348,22 +438,35 @@ participation-based burst windows.)
 insensitive to sparse spikes" — that conflates two things. It means the model
 *ranks* edges well (good AUC) but the **surrogate-derived threshold is
 miscalibrated**: too many false positives are admitted at the chosen cutoff. This
-is the **same, still-open surrogate-FDR calibration problem already documented in
-the LIF project** (where the true FDR was ~0.63 at the chosen threshold), carried
-over here unchanged — not a new NEURON-specific artifact, and not "expected/fine."
-Fixing it is threshold-calibration work in the inference package, independent of
+is the **same surrogate-FDR calibration problem already documented in the LIF
+project** (where the true FDR was ~0.63 at the chosen threshold), carried over
+here unchanged — not a new NEURON-specific artifact, and not "expected/fine."
+It was never fixed before the pipeline was retired; it would be
+threshold-calibration work in the archived inference package, independent of
 the simulator.
 
-### Session layout (must match the LIF pipeline exactly)
+### Session layout (raw files must match the LIF format exactly)
+
+`analysis/session_paths.py` is the **single source of truth** for the data
+tree; the analysis scripts accept `DATASET_SESSION` / `DATASET_STATE`
+environment variables.
 
 ```
-<save_dir>/<timestamp>/
-  network_<timestamp>.npz     # ground-truth topology (saved once)
+notebooks/NEURON data parallel/<session>/<state>/     # raw data (LIF format)
+  network_*.npz               # ground-truth topology (saved once)
   recording000.npz            # per recording: spike_times (ms), resampled raster, optional voltage
   recording001.npz ...
-  recording000_voltage.h5     # optional external voltage sidecar
   session_metadata.json
+notebooks/NEURON data parallel/<session>/results/<state>/{glm,bursts,ic_artifact,figures,other}/
+                              # analysis output, grouped by kind
 ```
+
+Committed sessions: `IC-locked_flagship_spikeonly_50rec` (normal: **50 raw
+spike-only recordings — the runnable dataset**),
+`IC-locked_zeroedge_control_15rec` (normal: 15 raw),
+`IC-locked_flagship_200rec` (**results/ only** — the raw 200-recording data was
+never committed), and `dataset_noise7_random2` (results/ only).
+`notebooks/NEURON data/` holds the old sequential pilot sessions.
 
 Neuron ids are the row index `0..N-1`, consistent across the network and
 recording files; spike times are in **milliseconds**. Inference-critical fields
@@ -380,9 +483,9 @@ recording files; spike times are in **milliseconds**. Inference-critical fields
 - **Reduced-A-current is not a faithful 4-AP model here.** The dramatic
   reduced-`gbar_kA` effect was specific to the dense discrete-hub topology; on the
   realistic log-normal topology it changes burst frequency in a
-  topology-dependent, sometimes wrong-signed way. Use the K⁺-clearance
-  (`tau_k`) seizure model instead; `gbar_block_state` is kept only as a
-  phenomenological knob (mainly useful with the discrete-hub builder).
+  topology-dependent, sometimes wrong-signed way. Use the slow-AHP-deficit
+  (`sahp_ainc_slow`) seizure model instead; `gbar_block_state` is kept only as
+  a phenomenological knob (mainly useful with the discrete-hub builder).
 - **Squid HH kinetics.** The default 6.3 °C `hh` is the classic squid model, not
   mammalian cortex. The 34 °C variant speeds kinetics but is still a caricature.
 - **`kdyn` is a lumped caricature.** [K⁺]ₒ is a single well-mixed pool per soma
@@ -396,7 +499,8 @@ recording files; spike times are in **milliseconds**. Inference-critical fields
 
 ## Attribution
 
-The `inference/lif_inference/` package and the saved data format are from the
-LIF project (see `inference/lif_inference/SOURCE.md`). The LIF project remains
-the source of truth for the inference code; it is vendored here so this
-repository is self-contained.
+The vendored learned-LIF/CCG inference package came from the LIF project and is
+now **archived** at `archive/inference/lif_inference/` (see its `SOURCE.md`).
+The saved data format still follows the LIF project's layout
+(`neuron_simulation/io.py` replicates it), so LIF-side tooling continues to
+read this repository's sessions unmodified.
