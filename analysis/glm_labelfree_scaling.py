@@ -29,9 +29,8 @@ import numpy as np
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(REPO, "inference"))
 import sparse_glm as sg  # noqa: E402
-from inference.lif_inference.glm_connectivity import (  # noqa: E402
+from glm_connectivity import (  # noqa: E402
     infer_inhibitory, typing_score)
 from session_paths import resolve, results_dir  # noqa: E402
 

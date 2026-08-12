@@ -30,9 +30,8 @@ import numpy as np
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(REPO, "inference"))   # lif_simulation lives here
 import sparse_glm as sg  # noqa: E402
-from inference.lif_inference.glm_connectivity import (  # noqa: E402
+from glm_connectivity import (  # noqa: E402
     infer_inhibitory, typing_score)
 
 # Dataset location. Override with the DATASET_SESSION / DATASET_STATE env
