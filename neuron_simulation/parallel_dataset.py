@@ -201,7 +201,14 @@ def generate_dataset_parallel(
     cluster_info = topology["cluster_info"]
     network_file = save_network_structure(
         topology["connections"], topology["neuron_positions"], cluster_info,
-        topology["weight_params"], timestamp, save_dir)
+        topology["weight_params"], timestamp, save_dir,
+        provenance=dict(
+            topology_seed=topology_kwargs.get("seed"),
+            noise_seed_base=noise_seed_base,
+            num_clusters=topology_kwargs.get("num_clusters"),
+            space_size=topology_kwargs.get("space_size"),
+            topology_kind=topology_kind,
+            builder_params=topology_kwargs))
 
     cfg = dict(
         topology=topology, cluster_info=cluster_info, build_kwargs=build_kwargs,
@@ -267,6 +274,7 @@ def generate_dataset_parallel(
         timestamp=timestamp, session_dir=session_dir, simulator="NEURON",
         n_recordings=n_recordings, recording_duration=recording_duration,
         num_neurons=topology["n_neurons"], num_connections=int(len(topology["connections"])),
+        topology_seed=topology_kwargs.get("seed"), noise_seed_base=noise_seed_base,
         topology_kind=topology_kind, density=float(cluster_info.get("density", 0.0)),
         target_freq=target_freq, dt=dt, discard_transient_ms=discard_transient_ms,
         record_voltage=record_voltage, state=state, network_file=network_file,

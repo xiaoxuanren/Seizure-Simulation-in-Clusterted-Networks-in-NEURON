@@ -1,0 +1,33 @@
+# HTCondor submit file: one job per recording, driven by jobs.txt
+# (produced by make_manifest.py). Before submitting:
+#   1. build the container:   apptainer build neuron-sim.sif neuron.def
+#      and put it in staging: cp neuron-sim.sif /staging/YOUR_NETID/
+#   2. edit STAGING_DIR in job.sh and the container path below
+#   3. python3 make_manifest.py   (writes jobs.txt + repo.tar.gz)
+#   4. condor_submit generate.sub
+
+container_image = file:///staging/YOUR_NETID/neuron-sim.sif
+universe = container
+
+executable = job.sh
+arguments = $(session) $(recidx)
+
+transfer_input_files = repo.tar.gz
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+# outputs go to /staging from inside job.sh; nothing large comes back here
+transfer_output_files =
+
+log    = logs/$(Cluster).log
+output = logs/$(session)_r$(recidx).out
+error  = logs/$(session)_r$(recidx).err
+
+request_cpus   = 1
+request_memory = 4GB
+request_disk   = 4GB
+
+# ~70-90 min/job; retry transient failures (eviction, node issues) up to 3x
+max_retries = 3
+requirements = (Target.HasCHTCStaging == true)
+
+queue session,recidx from jobs.txt

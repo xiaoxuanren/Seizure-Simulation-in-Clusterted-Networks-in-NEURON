@@ -1,0 +1,25 @@
+Bootstrap: docker
+From: python:3.11-slim-bookworm
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gcc g++ make libreadline-dev && \
+        rm -rf /var/lib/apt/lists/*
+    # numpy is PINNED to the 2.0 line: every job rebuilds its topology from
+    # seed, and numpy Generator streams are not guaranteed stable across
+    # feature releases -- an unpinned rebuild of this image before a
+    # resubmission could silently simulate on a different network than the
+    # session's saved network npz. 2.0.* specifically matches the local
+    # Windows/Python-3.9 setup (numpy 2.0.2) that generated the flagship, so
+    # CHTC-built topologies reproduce locally-built ones bit-for-bit
+    # (verified: c50/seed1 reproduces the flagship network).
+    # (generate_one.py records the numpy version in session_provenance.json.)
+    pip install --no-cache-dir \
+        "neuron==8.2.*" "numpy==2.0.*" scipy matplotlib h5py
+
+%labels
+    Purpose NEURON seizure-simulation sweep worker (see chtc/README.md)
+
+%test
+    python3 -c "import neuron; print('NEURON', neuron.__version__)"
+    which nrnivmodl
