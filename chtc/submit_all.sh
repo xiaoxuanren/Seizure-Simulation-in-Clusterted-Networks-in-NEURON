@@ -29,7 +29,10 @@ if [ ! -d "${STAGING}" ]; then
 fi
 
 echo "== patching placeholders for ${NETID}"
-sed -i "s|/staging/YOUR_NETID|/staging/${NETID}|g" "${HERE}/job.sh" "${HERE}/generate.sub"
+# patch a gitignored COPY of the submit file, so git pull never conflicts
+# with locally sed-modified tracked files
+sed "s|/staging/YOUR_NETID|/staging/${NETID}|g" "${HERE}/generate.sub" \
+    > "${HERE}/generate.local.sub"
 
 if [ ! -f "${STAGING}/neuron-sim.sif" ]; then
     echo "== building container (once)"
@@ -63,7 +66,7 @@ fi
 
 echo "== submitting"
 cd "${HERE}"
-condor_submit generate.sub
+condor_submit generate.local.sub
 echo
 condor_q
 echo
