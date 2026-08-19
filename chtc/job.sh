@@ -1,12 +1,15 @@
 #!/bin/bash
 # One CHTC job = one recording. Runs inside the neuron-sim container.
 # Arguments: $1 = session name (e.g. sweep_c50_seed01), $2 = recording index.
-# EDIT STAGING_DIR to your /staging allocation before submitting.
+#
+# Outputs return via HTCondor file transfer as ONE uniquely-named tar per job
+# (CHTC guidance for sub-GB outputs: use file transfer to /home, not /staging).
+# The rec-0 job's tar additionally carries network_<session>.npz and
+# session_provenance.json. chtc/collect.py extracts the tars automatically.
 set -euo pipefail
 
 SESSION="$1"
 REC_IDX="$2"
-STAGING_DIR="/staging/YOUR_NETID/neuron_sweeps"
 
 echo "job start: session=${SESSION} rec=${REC_IDX} host=$(hostname) $(date -Is)"
 
@@ -29,27 +32,16 @@ python3 chtc/generate_one.py \
     --rec-idx "${REC_IDX}" \
     --out out
 
-# --- ship outputs to staging, atomically: cp to a temp name, then mv (mv is
-#     atomic within a filesystem), so an evicted job can never leave a
-#     truncated file under the final name. NOT via HTCondor transfer:
-#     ~77 MB/recording, ~308 GB for the whole sweep. ----------------------
-DEST="${STAGING_DIR}/${SESSION}"
-mkdir -p "${DEST}"
-put() {  # put <local-file>
-    local base tmp
-    base=$(basename "$1")
-    tmp="${DEST}/.tmp.$$.${base}"
-    cp "$1" "${tmp}"
-    mv -f "${tmp}" "${DEST}/${base}"
-    echo "staged ${base}"
-}
+# --- package for transfer back (sandbox root; unique name per job) --------
+cd ..
+TARBALL="${SESSION}_r${REC_IDX}.tar"
 REC=$(printf "recording%03d" "${REC_IDX}")
-for f in "out/${SESSION}/${REC}"*; do
-    put "${f}"
-done
 if [ "${REC_IDX}" -eq 0 ]; then
-    put "out/${SESSION}/network_${SESSION}.npz"
-    put "out/${SESSION}/session_provenance.json"
+    tar cf "${TARBALL}" -C repo/out "${SESSION}"
+else
+    tar cf "${TARBALL}" -C repo/out \
+        "${SESSION}/${REC}.npz" "${SESSION}/${REC}_summary.json"
 fi
+echo "packaged $(du -h "${TARBALL}" | cut -f1) -> ${TARBALL}"
 
 echo "job done: $(date -Is)"

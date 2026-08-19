@@ -21,10 +21,12 @@ Usage:
     python chtc/collect.py --src ... --move       # move instead of copy
 """
 import argparse
+import glob as _glob
 import json
 import os
 import shutil
 import sys
+import tarfile
 
 import numpy as np
 
@@ -46,6 +48,24 @@ def expected_sessions(sweep):
             out[name] = dict(group=g, topology_seed=s,
                              n_recordings=int(g["n_recordings"]))
     return out
+
+
+def extract_job_tars(src):
+    """Extract per-job '<session>_r<idx>.tar' files (HTCondor-transfer layout)
+    found directly under --src into per-session folders, then leave the tars
+    in place (delete them yourself once a session collects OK)."""
+    tars = sorted(_glob.glob(os.path.join(src, "*_r*.tar")))
+    for t in tars:
+        try:
+            with tarfile.open(t) as tf:
+                try:
+                    tf.extractall(src, filter="data")
+                except TypeError:               # Python < 3.12: no filter kwarg
+                    tf.extractall(src)
+        except Exception as exc:
+            print("WARNING: could not extract %s: %s" % (os.path.basename(t), exc))
+    if tars:
+        print("extracted %d job tars under %s" % (len(tars), src))
 
 
 def rel(path):
@@ -192,6 +212,7 @@ def main():
 
     sweep = load_sweep(a.sweep)
     state = sweep["state"]
+    extract_job_tars(a.src)
     todo = expected_sessions(sweep)
     if a.sessions:
         todo = {k: v for k, v in todo.items() if k in set(a.sessions)}
