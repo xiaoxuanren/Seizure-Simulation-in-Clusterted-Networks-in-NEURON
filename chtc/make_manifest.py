@@ -37,12 +37,17 @@ def main():
     state = sweep.get("state", "normal")
 
     def done(session, *names):
-        """True if every named file exists in the done-root, in either the raw
-        staging layout (<session>/f) or the assembled one (<session>/<state>/f)."""
+        """True if every named file exists in the done-root, in the raw layout
+        (<session>/f), the assembled one (<session>/<state>/f), or -- for the
+        HTCondor-transfer flow -- as an unextracted <session>_r<idx>.tar."""
         return all(
             os.path.exists(os.path.join(a.done_root, session, nm)) or
             os.path.exists(os.path.join(a.done_root, session, state, nm))
             for nm in names)
+
+    def tar_done(session, rec):
+        return a.done_root and os.path.exists(
+            os.path.join(a.done_root, "%s_r%d.tar" % (session, rec)))
 
     only = set(a.sessions) if a.sessions else None
     lines, skipped = [], 0
@@ -57,7 +62,7 @@ def main():
                     # the rec-0 job also produces the network npz + provenance;
                     # if either is missing the job must run again
                     need += ["network_%s.npz" % session, "session_provenance.json"]
-                if a.done_root and done(session, *need):
+                if a.done_root and (done(session, *need) or tar_done(session, rec)):
                     skipped += 1
                     continue
                 lines.append("%s %d" % (session, rec))

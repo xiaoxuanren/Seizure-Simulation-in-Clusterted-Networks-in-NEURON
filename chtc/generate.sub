@@ -15,8 +15,10 @@ arguments = $(session) $(recidx)
 transfer_input_files = repo.tar.gz
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT
-# outputs go to /staging from inside job.sh; nothing large comes back here
-transfer_output_files =
+# each job returns ONE uniquely-named tar (~120 MB) into this submit dir on
+# /home; collect.py extracts them (CHTC guidance: sub-GB outputs via file
+# transfer, not /staging)
+transfer_output_files = $(session)_r$(recidx).tar
 
 log    = logs/$(Cluster).log
 output = logs/$(session)_r$(recidx).out
@@ -26,8 +28,9 @@ request_cpus   = 1
 request_memory = 4GB
 request_disk   = 4GB
 
-# ~70-90 min/job; retry transient failures (eviction, node issues) up to 3x
+# ~17 min/job observed; retry transient failures (eviction, node issues) up to 3x
 max_retries = 3
+# staging still required: the container image is served from /staging
 requirements = (Target.HasCHTCStaging == true)
 
 queue session,recidx from jobs.txt

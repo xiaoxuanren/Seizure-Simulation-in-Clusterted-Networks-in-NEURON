@@ -9,9 +9,11 @@ single core. The sweep declared in [`sweep_config.json`](sweep_config.json):
 | `sweep_c50` | 50 | 15.0 | 1–10 | 200 |
 | `sweep_c40` | 40 | 13.416 (= 15·√(40/50), constant neuron density) | 11–20 | 200 |
 
-= 20 networks × 200 recordings = **4,000 jobs ≈ 4,700 core-hours**, full
-voltage (`inline_npz`, ~77 MB/recording, **~308 GB total** → outputs go to
-`/staging`, never through HTCondor file transfer).
+= 20 networks × 200 recordings = **4,000 jobs** (~17 min each observed), full
+voltage (`inline_npz`, ~105–130 MB/recording, **~470 GB total**). Each job
+returns its outputs as ONE uniquely-named tar via normal HTCondor file
+transfer into the submit directory on `/home` (per CHTC guidance for sub-GB
+outputs); `/staging` only hosts the container image.
 
 **Reproducibility / provenance.** Everything is deterministic from the config:
 topology from `(num_clusters, space_size, seed)`; background noise per
@@ -32,13 +34,13 @@ in every session's provenance either way.
 
 ## One-time setup (CHTC submit node)
 
-You need a CHTC account and a [/staging allocation](https://chtc.cs.wisc.edu/uw-research-computing/file-avail-largedata).
-**The default allocation (100 GB / 1,000 files) is NOT enough for the full
-sweep** — the 4,000 full-voltage recordings are ~308 GB and ~8,000 files.
-Request **≥ 400 GB and ≥ 10,000 files** (quota AND file cap) for the full run.
-Until the increase lands you can run staged waves of at most **two sessions at
-a time** (~15.4 GB + 402 files each): pass session names to `submit_all.sh`,
-download and clear staging between waves.
+You need a CHTC account, a **`/home` quota that fits the outputs** (the full
+sweep is ~470 GB; CHTC granted 1.1 TB here on request — for sub-GB output
+files they prefer `/home` + HTCondor file transfer over `/staging`), and a
+default [/staging allocation](https://chtc.cs.wisc.edu/uw-research-computing/file-avail-largedata)
+which only needs to hold the ~1 GB container image. With a default-sized
+`/home` (40 GB), run session-filtered waves instead (pass session names to
+`submit_all.sh`) and download + delete the returned tars between waves.
 
 ```bash
 # on the submit node
@@ -75,13 +77,22 @@ condor_submit generate.sub
 
 ## Collect
 
-Download `/staging/YOUR_NETID/neuron_sweeps/` to your machine (e.g. with
-`rsync` or `scp` — ~308 GB), then assemble it into the repo's session layout
-and validate:
+Each finished job leaves `<session>_r<idx>.tar` in the `chtc/` submit
+directory. Download them to your machine (remote glob works with scp):
 
 ```bash
-python chtc/collect.py --src "D:/path/to/neuron_sweeps"
+scp "YOUR_NETID@ap2001.chtc.wisc.edu:Seizure-Simulation-in-Clusterted-Networks-in-NEURON/chtc/*_r*.tar" "D:/path/to/download_dir"
 ```
+
+then assemble into the repo's session layout and validate (`collect.py`
+auto-extracts any job tars it finds under `--src`):
+
+```bash
+python chtc/collect.py --src "D:/path/to/download_dir"
+```
+
+After a session collects OK, delete its tars on the access point to free
+`/home` (`rm chtc/<session>_r*.tar`).
 
 This creates `notebooks/NEURON data parallel/<session>/normal/` with the
 recordings, `network_<session>.npz`, and a `session_metadata.json` per
