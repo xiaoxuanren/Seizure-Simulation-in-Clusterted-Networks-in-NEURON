@@ -70,4 +70,4 @@ condor_submit generate.local.sub
 echo
 condor_q
 echo
-echo "Watch with: condor_q   |   outputs land in ${STAGING}/neuron_sweeps/<session>/"
+echo "Watch with: condor_q   |   outputs land as <session>_r<idx>.tar in ${HERE}/"
