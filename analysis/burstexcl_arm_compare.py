@@ -92,19 +92,35 @@ def run_session(session_name):
         print("  %-5s thr=%.5f estFDR=%.2f | pred %6d | TP %6d FP %6d FN %6d | "
               "P %.3f R %.3f F1 %.3f" % (tag, thr, est_fdr, int(pred.sum()),
                                          tp, fp, fn, P, R, F1), flush=True)
-        return P, R, F1
+        return dict(tag=tag, threshold=float(thr), est_fdr=float(est_fdr),
+                    n_pred=int(pred.sum()), tp=tp, fp=fp, fn=fn,
+                    precision=float(P), recall=float(R), f1=float(F1))
 
     total_bins = bnd[-1]
     n_bursts = sum(len(w) for w in windows)
     print("%s: N=%d, %d recordings, %d burst windows" % (
         session_name, n, len(rec_paths), n_bursts), flush=True)
 
-    p_full, _, _ = arm(M, bnd, "FULL")
+    full = arm(M, bnd, "FULL")
     Mx, bndx, dropped = trim_burst_windows(M, bnd)
     print("  EXCL drops %d/%d bins (%.2f%%), %d segments" % (
         dropped, total_bins, 100 * dropped / total_bins, len(bndx) - 1), flush=True)
-    p_excl, _, _ = arm(Mx, bndx, "EXCL")
-    print("  precision delta: %+.3f\n" % (p_excl - p_full), flush=True)
+    excl = arm(Mx, bndx, "EXCL")
+    print("  precision delta: %+.3f\n" % (excl["precision"] - full["precision"]),
+          flush=True)
+
+    # persist for sweep_summary.py
+    import json
+    from session_paths import results_dir
+    out = os.path.join(
+        results_dir(session_name, os.environ.get("DATASET_STATE", "normal"), "glm"),
+        "burstexcl_arms.json")
+    with open(out, "w", encoding="utf-8") as fh:
+        json.dump(dict(session=session_name, n_neurons=n,
+                       n_burst_windows=n_bursts, pad_ms=PAD_MS,
+                       dropped_bins=dropped, total_bins=total_bins,
+                       full=full, excl=excl), fh, indent=1)
+    print("  saved -> %s" % out, flush=True)
 
 
 if __name__ == "__main__":
