@@ -54,15 +54,30 @@ def run_session(session_name):
     for recs in (range(0, n_rec, 2), range(1, n_rec, 2)):
         Mh, bh = subset(M, bnd, list(recs))
         halves.append(np.abs(bx.sum4_W(Mh, bh))[off])
-    rho = float(spearmanr(halves[0], halves[1]).statistic)
-    print("%s: split-half Spearman rho = %.4f" % (session_name, rho), flush=True)
+    a, b = halves
+
+    # Global Spearman over ALL pairs is dominated by the non-edge noise floor
+    # (most pairs have ~zero score, randomly ranked) -- report it, but the
+    # informative numbers are at the TOP of the ranking:
+    #   * jaccard_topk: overlap of each half's top-K pairs, K = # true edges
+    #   * spearman_topk: rank corr restricted to the union of both top-K sets
+    rho_all = float(spearmanr(a, b).statistic)
+    gt = sg.load_ground_truth(bx.SESSION)
+    K = int(((gt["A_exc"] | gt["A_inh"]) & off).sum())
+    top_a = set(np.argsort(a)[-K:]); top_b = set(np.argsort(b)[-K:])
+    jac = len(top_a & top_b) / max(len(top_a | top_b), 1)
+    union = np.fromiter(top_a | top_b, dtype=np.int64)
+    rho_top = float(spearmanr(a[union], b[union]).statistic)
+    print("%s: top-K jaccard %.3f | top-K Spearman %.3f | global Spearman %.3f (K=%d)"
+          % (session_name, jac, rho_top, rho_all, K), flush=True)
 
     out = os.path.join(results_dir(session_name, os.environ.get("DATASET_STATE", "normal"),
                                    "glm"), "splithalf.json")
+    result = dict(session=session_name, n_recordings=n_rec, k_true_edges=K,
+                  jaccard_topk=jac, spearman_topk=rho_top, spearman_all=rho_all)
     with open(out, "w", encoding="utf-8") as fh:
-        json.dump(dict(session=session_name, n_recordings=n_rec,
-                       spearman_rho=rho), fh, indent=1)
-    return rho
+        json.dump(result, fh, indent=1)
+    return result
 
 
 def figure(results):
@@ -70,16 +85,21 @@ def figure(results):
     OUT = os.path.join(DATA, "sweep_summary")
     os.makedirs(OUT, exist_ok=True)
     fig, ax = plt.subplots(figsize=(7.0, 4.8))
-    for session, rho in results.items():
+    for session, r in results.items():
         with open(os.path.join(resolve(session, "normal"), "session_metadata.json"),
                   encoding="utf-8") as fh:
             m = json.load(fh)
-        b = np.mean([r.get("n_bursts", 0) for r in m["recordings"]])
-        ax.plot(b, rho, "o", ms=8, color=C50 if "_c50_" in session else C40)
+        b = np.mean([rr.get("n_bursts", 0) for rr in m["recordings"]])
+        col = C50 if "_c50_" in session else C40
+        ax.plot(b, r["jaccard_topk"], "o", ms=8, color=col)
+        ax.plot(b, r["spearman_topk"], "^", ms=7, color=col, alpha=0.55)
+    ax.plot([], [], "ko", label="top-K Jaccard overlap")
+    ax.plot([], [], "k^", alpha=0.55, label="top-K Spearman rho")
     ax.set_xlabel("bursts per recording")
-    ax.set_ylabel("split-half Spearman rho of |W| ranking")
-    ax.set_title("Edge-ranking reliability (100 vs 100 recordings; blue c50, red c40)")
-    ax.grid(alpha=0.3)
+    ax.set_ylabel("split-half reliability of the top of the |W| ranking")
+    ax.set_title("Edge-ranking reliability, 100 vs 100 recordings\n"
+                 "(K = # true edges; blue c50, red c40)")
+    ax.grid(alpha=0.3); ax.legend(loc="lower left", fontsize=8)
     fig.tight_layout(); fig.savefig(os.path.join(OUT, "splithalf_reliability.png"),
                                     dpi=140, facecolor="white"); plt.close(fig)
     print("figure -> %s" % os.path.join(OUT, "splithalf_reliability.png"))
