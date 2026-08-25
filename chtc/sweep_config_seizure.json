@@ -1,0 +1,59 @@
+{
+ "comment": "SEIZURE-state companion sweep to sweep_config.json: same 20 networks, same seeds, PAIRED noise streams (noise_seed_base formula is state-independent, so seizure recording N shares its noise realization with normal recording N). Phenotype: sahp_ainc_slow=0.004 (full-participation bursts) + sahp_tau_slow=3000 ms (fast ~24/min burst clock; registry default 6500). Chosen from single-recording previews on seeds 09/03/12/14, 2026-08-25.",
+ "state": "seizure",
+ "build_overrides": {
+  "noise_weight": 0.007,
+  "sahp_tau_slow": 3000.0
+ },
+ "recording_ms": 60000.0,
+ "dt": 0.05,
+ "discard_transient_ms": 1000.0,
+ "record_voltage": true,
+ "voltage_dt": 1.0,
+ "voltage_storage_backend": "inline_npz",
+ "participation_threshold": 0.35,
+ "target_freq": 10,
+ "save_rasters": false,
+ "noise_seed_offset": 1000,
+ "noise_seed_step": 100,
+ "topology_kind": "lognormal",
+ "groups": [
+  {
+   "prefix": "sweep_c50",
+   "num_clusters": 50,
+   "space_size": 15.0,
+   "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+   ],
+   "n_recordings": 200
+  },
+  {
+   "prefix": "sweep_c40",
+   "num_clusters": 40,
+   "space_size": 13.416407864998739,
+   "seeds": [
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20
+   ],
+   "n_recordings": 200
+  }
+ ],
+ "sahp_ainc_slow_seizure": 0.004
+}

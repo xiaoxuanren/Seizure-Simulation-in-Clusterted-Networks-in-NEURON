@@ -45,9 +45,11 @@ def main():
             os.path.exists(os.path.join(a.done_root, session, state, nm))
             for nm in names)
 
+    tar_tag = "" if state == "normal" else "_" + state
+
     def tar_done(session, rec):
         return a.done_root and os.path.exists(
-            os.path.join(a.done_root, "%s_r%d.tar" % (session, rec)))
+            os.path.join(a.done_root, "%s%s_r%d.tar" % (session, tar_tag, rec)))
 
     only = set(a.sessions) if a.sessions else None
     lines, skipped = [], 0
@@ -79,7 +81,7 @@ def main():
                     filter=lambda ti: None if ("__pycache__" in ti.name or
                                                ti.name.endswith((".o", ".c", ".dll"))) else ti)
             tar.add(os.path.join(HERE, "generate_one.py"), arcname="repo/chtc/generate_one.py")
-            tar.add(a.sweep, arcname="repo/chtc/sweep_config.json")
+            tar.add(a.sweep, arcname="repo/chtc/" + os.path.basename(a.sweep))
         print("%s: %.1f MB" % (tar_path, os.path.getsize(tar_path) / 1e6))
 
 

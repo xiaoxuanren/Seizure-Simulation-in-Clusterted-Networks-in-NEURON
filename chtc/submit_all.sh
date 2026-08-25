@@ -4,6 +4,7 @@
 #     bash chtc/submit_all.sh                                  # FULL sweep, NetID = whoami
 #     bash chtc/submit_all.sh mynetid                          # full sweep, explicit NetID
 #     bash chtc/submit_all.sh mynetid sweep_c50_seed01 ...     # only these sessions
+#     SWEEP=seizure bash chtc/submit_all.sh mynetid ...        # the SEIZURE companion sweep
 #
 # Session filtering exists for staged waves: the DEFAULT /staging quota
 # (100 GB / 1,000 files) fits at most TWO full-voltage sessions at a time
@@ -21,6 +22,18 @@ SESSIONS=("$@")                 # optional session-name filter
 STAGING="/staging/${NETID}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
+SWEEP="${SWEEP:-normal}"        # SWEEP=seizure selects the companion sweep
+if [ "${SWEEP}" = "seizure" ]; then
+    CFG="${HERE}/sweep_config_seizure.json"
+    SUB_SRC="${HERE}/generate_seizure.sub"
+    SUB_LOCAL="${HERE}/generate_seizure.local.sub"
+else
+    CFG="${HERE}/sweep_config.json"
+    SUB_SRC="${HERE}/generate.sub"
+    SUB_LOCAL="${HERE}/generate.local.sub"
+fi
+echo "== sweep: ${SWEEP} (${CFG##*/})"
+
 if [ ! -d "${STAGING}" ]; then
     echo "ERROR: ${STAGING} does not exist."
     echo "Request a /staging allocation (>= 400 GB for this sweep) first:"
@@ -31,8 +44,7 @@ fi
 echo "== patching placeholders for ${NETID}"
 # patch a gitignored COPY of the submit file, so git pull never conflicts
 # with locally sed-modified tracked files
-sed "s|/staging/YOUR_NETID|/staging/${NETID}|g" "${HERE}/generate.sub" \
-    > "${HERE}/generate.local.sub"
+sed "s|/staging/YOUR_NETID|/staging/${NETID}|g" "${SUB_SRC}" > "${SUB_LOCAL}"
 
 if [ ! -f "${STAGING}/neuron-sim.sif" ]; then
     echo "== building container (once)"
@@ -59,14 +71,14 @@ mkdir -p "${STAGING}/neuron_sweeps" "${HERE}/logs"
 echo "== writing jobs.txt + repo.tar.gz"
 if [ "${#SESSIONS[@]}" -gt 0 ]; then
     echo "   (session filter: ${SESSIONS[*]})"
-    ( cd "${HERE}/.." && python3 chtc/make_manifest.py --sessions "${SESSIONS[@]}" )
+    ( cd "${HERE}/.." && python3 chtc/make_manifest.py --sweep "${CFG}" --sessions "${SESSIONS[@]}" )
 else
-    ( cd "${HERE}/.." && python3 chtc/make_manifest.py )
+    ( cd "${HERE}/.." && python3 chtc/make_manifest.py --sweep "${CFG}" )
 fi
 
 echo "== submitting"
 cd "${HERE}"
-condor_submit generate.local.sub
+condor_submit "${SUB_LOCAL##*/}"
 echo
 condor_q
 echo

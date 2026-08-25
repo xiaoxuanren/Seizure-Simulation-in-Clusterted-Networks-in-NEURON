@@ -111,6 +111,29 @@ python scripts/run_inference.py --session "notebooks/NEURON data parallel/sweep_
 Note: the new sessions are raw data, so git ignores them by default
 (committing a dataset is a deliberate `git add -f`, per `.gitignore`).
 
+## The seizure companion sweep
+
+`sweep_config_seizure.json` regenerates the SAME 20 networks in the seizure
+state — `sahp_ainc_slow = 0.004` (full-participation bursts) plus
+`sahp_tau_slow = 3000 ms` (fast ~24 bursts/min clock) — with **paired noise
+streams**: the noise-seed formula is state-independent, so seizure recording N
+shares its noise realization with normal recording N. Submit with:
+
+```bash
+SWEEP=seizure bash chtc/submit_all.sh YOUR_NETID
+```
+
+Output tars are tagged `<session>_seizure_r<idx>.tar` (no collision with
+normal-state tars). Collect with the matching config so recordings land in
+`<session>/seizure/`:
+
+```bash
+python chtc/collect.py --sweep chtc/sweep_config_seizure.json --src <download>
+```
+
+Seizure runs spike 3–6× more than normal: expect ~20–35 min/job and clear the
+old normal-state tars from `chtc/` first so `/home` has room.
+
 ## Local smoke test (before burning core-hours)
 
 Any machine with NEURON installed (no Condor needed):
