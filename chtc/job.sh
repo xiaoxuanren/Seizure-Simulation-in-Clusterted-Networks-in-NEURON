@@ -1,6 +1,8 @@
 #!/bin/bash
 # One CHTC job = one recording. Runs inside the neuron-sim container.
-# Arguments: $1 = session name (e.g. sweep_c50_seed01), $2 = recording index.
+# Arguments: $1 = session name (e.g. sweep_c50_seed01), $2 = recording index,
+#            $3 (optional) = state tag for the output tar name (e.g. _seizure)
+#            $4 (optional) = sweep config path (default chtc/sweep_config.json)
 #
 # Outputs return via HTCondor file transfer as ONE uniquely-named tar per job
 # (CHTC guidance for sub-GB outputs: use file transfer to /home, not /staging).
@@ -10,6 +12,8 @@ set -euo pipefail
 
 SESSION="$1"
 REC_IDX="$2"
+TAG="${3:-}"
+SWEEP_CFG="${4:-chtc/sweep_config.json}"
 
 echo "job start: session=${SESSION} rec=${REC_IDX} host=$(hostname) $(date -Is)"
 
@@ -27,14 +31,14 @@ sed -i 's/\r$//' neuron_simulation/mechanisms/*.mod
 
 # --- run the one recording ------------------------------------------------
 python3 chtc/generate_one.py \
-    --sweep chtc/sweep_config.json \
+    --sweep "${SWEEP_CFG}" \
     --session "${SESSION}" \
     --rec-idx "${REC_IDX}" \
     --out out
 
 # --- package for transfer back (sandbox root; unique name per job) --------
 cd ..
-TARBALL="${SESSION}_r${REC_IDX}.tar"
+TARBALL="${SESSION}${TAG}_r${REC_IDX}.tar"
 REC=$(printf "recording%03d" "${REC_IDX}")
 if [ "${REC_IDX}" -eq 0 ]; then
     tar cf "${TARBALL}" -C repo/out "${SESSION}"

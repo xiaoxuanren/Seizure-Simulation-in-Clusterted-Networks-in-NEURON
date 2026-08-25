@@ -1,0 +1,32 @@
+# HTCondor submit file for the SEIZURE-state companion sweep
+# (sweep_config_seizure.json: sahp_ainc_slow=0.004 + sahp_tau_slow=3000,
+# paired noise streams with the normal-state sweep). Tars are tagged
+# _seizure so they never collide with normal-state outputs.
+# Submit via: bash submit_all.sh <netid> ...   with SWEEP=seizure, or:
+#   python3 make_manifest.py --sweep chtc/sweep_config_seizure.json
+#   condor_submit generate_seizure.local.sub   (after NetID patching)
+
+container_image = file:///staging/YOUR_NETID/neuron-sim.sif
+universe = container
+
+executable = job.sh
+arguments = $(session) $(recidx) _seizure chtc/sweep_config_seizure.json
+
+transfer_input_files = repo.tar.gz
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_output_files = $(session)_seizure_r$(recidx).tar
+
+log    = logs/$(Cluster).log
+output = logs/$(session)_seizure_r$(recidx).out
+error  = logs/$(session)_seizure_r$(recidx).err
+
+request_cpus   = 1
+request_memory = 4GB
+request_disk   = 4GB
+
+# seizure runs spike 3-6x more than normal (~20-35 min/job expected)
+max_retries = 3
+requirements = (Target.HasCHTCStaging == true)
+
+queue session,recidx from jobs.txt
