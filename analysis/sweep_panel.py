@@ -1,10 +1,12 @@
 """Per-network standard panel for the sweep sessions.
 
 For each session, produces in results/<state>/figures/:
-  recordingNNN_raster.png   -- the session's REPRESENTATIVE example raster:
-                               the recording whose burst count is closest to
-                               the session median (ties -> lowest index),
-                               rendered by render_rasters.py
+  recordingNNN_raster_shuffled.png -- the session's REPRESENTATIVE example
+                               raster (recording whose burst count is closest
+                               to the session median, ties -> lowest index),
+                               rendered by render_rasters.py with RANDOMIZED
+                               neuron order on the y axis and no burst-count
+                               annotation
   lag_auc.png               -- per-lag exc/inh AUC + AP from glm_lag_sweep.json
 
 Run with the NEURON-capable interpreter (render_rasters imports the package):
@@ -37,11 +39,11 @@ def median_burst_recording(meta):
 
 def raster(session, sd, figdir, meta):
     idx = median_burst_recording(meta)
-    out = os.path.join(figdir, "recording%03d_raster.png" % idx)
+    out = os.path.join(figdir, "recording%03d_raster_shuffled.png" % idx)
     cmd = [sys.executable, os.path.join(HERE, "render_rasters.py"),
            "--folder", sd, "--phenotype", STATE, "--sahp", "0.01",
            "--indices", str(idx), "--out", figdir,
-           "--no-shuffled", "--burst-count", "--dot-size", "4"]
+           "--only-shuffled", "--dot-size", "4"]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode:
         print("  raster FAILED:\n%s" % r.stdout[-500:] + r.stderr[-500:])
