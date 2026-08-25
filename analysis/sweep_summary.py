@@ -175,6 +175,84 @@ def figures(rows):
                                     dpi=140, facecolor="white"); plt.close(fig)
 
 
+def scaling_by_group(rows):
+    """Performance vs recording duration, one column per cluster-size group
+    (10 curves each, colored by burstiness), plus a minutes-to-criterion
+    summary panel."""
+    data = {}
+    for r in rows:
+        p = os.path.join(results_dir(r["session"], STATE, "glm", create=False),
+                         "scaling.json")
+        if os.path.exists(p):
+            with open(p, encoding="utf-8") as fh:
+                data[r["session"]] = (r, json.load(fh)["grid"])
+    if not data:
+        return
+    bmax = max(r["bursts_per_rec"] for r, _ in data.values()) or 1.0
+    cmap = plt.get_cmap("viridis")
+
+    fig, axes = plt.subplots(2, 2, figsize=(12.8, 8.6), sharex=True)
+    for j, grp in enumerate(("c50", "c40")):
+        for session, (r, grid) in sorted(data.items()):
+            if r["group"] != grp:
+                continue
+            c = cmap(r["bursts_per_rec"] / bmax)
+            mins = [g["n_recordings"] for g in grid]        # 60 s each -> minutes
+            axes[0][j].plot(mins, [g["auc"] for g in grid], "o-", color=c,
+                            ms=3.5, lw=1.3, alpha=0.85)
+            axes[1][j].plot(mins, [g["precision"] for g in grid], "o-", color=c,
+                            ms=3.5, lw=1.3, alpha=0.85)
+        for i, metric in enumerate(("auc", "precision")):
+            grids = [g for r, g in data.values() if r["group"] == grp]
+            xs = [p["n_recordings"] for p in grids[0]]
+            mean = [np.mean([g[k][metric] for g in grids if k < len(g)])
+                    for k in range(len(xs))]
+            axes[i][j].plot(xs, mean, "-", color="black", lw=2.5, alpha=0.75)
+        axes[0][j].set_title("%s (%d networks; black = group mean)"
+                             % (grp, sum(1 for r, _ in data.values() if r["group"] == grp)))
+        axes[1][j].set_xlabel("minutes of recording (60 s each)")
+        axes[0][j].set_ylim(0.55, 1.0); axes[1][j].set_ylim(0, 1.0)
+        for i in (0, 1):
+            axes[i][j].grid(alpha=0.3)
+            axes[i][j].set_xscale("log")
+            axes[i][j].set_xticks([10, 20, 50, 100, 200])
+            axes[i][j].set_xticklabels([10, 20, 50, 100, 200])
+    axes[0][0].set_ylabel("excitatory+inhibitory AUC")
+    axes[1][0].set_ylabel("precision @ FDR 0.70")
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, bmax))
+    fig.colorbar(sm, ax=axes, label="bursts per recording", shrink=0.85)
+    fig.suptitle("Inference performance vs recording duration -- %s state" % STATE)
+    fig.savefig(os.path.join(OUT, "scaling_by_group.png"), dpi=140,
+                facecolor="white", bbox_inches="tight")
+    plt.close(fig)
+
+    # minutes to reach AUC >= 0.9 (linear interpolation on the grid)
+    fig, ax = plt.subplots(figsize=(7.2, 4.9))
+    for session, (r, grid) in sorted(data.items()):
+        xs = np.array([g["n_recordings"] for g in grid], float)
+        ys = np.array([g["auc"] for g in grid], float)
+        above = np.nonzero(ys >= 0.9)[0]
+        col = C50 if r["group"] == "c50" else C40
+        if len(above):
+            k = above[0]
+            need = xs[k] if k == 0 else np.interp(0.9, [ys[k-1], ys[k]], [xs[k-1], xs[k]])
+            ax.plot(r["bursts_per_rec"], need, "o" if r["group"] == "c50" else "s",
+                    color=col, ms=8)
+        else:
+            ax.plot(r["bursts_per_rec"], 200, "x", color=col, ms=10, mew=2)
+    ax.plot([], [], "o", color=C50, label="c50")
+    ax.plot([], [], "s", color=C40, label="c40")
+    ax.plot([], [], "kx", label="never reaches 0.9 (plotted at 200)")
+    ax.set_xlabel("bursts per recording")
+    ax.set_ylabel("minutes of data to reach AUC 0.9")
+    ax.set_title("How much recording does inference need? -- %s state" % STATE)
+    ax.grid(alpha=0.3); ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "minutes_to_criterion.png"), dpi=140,
+                facecolor="white")
+    plt.close(fig)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     rows = gather()
@@ -186,6 +264,7 @@ def main():
         w.writerows(rows)
     print("%s: %d networks, %d columns" % (csv_path, len(rows), len(keys)))
     figures(rows)
+    scaling_by_group(rows)
     for f in ("dose_response", "exclusion_effect", "size_vs_bursting", "typed_vs_untyped"):
         print("  %s.png" % os.path.join(OUT, f))
 
