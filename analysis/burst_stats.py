@@ -70,12 +70,20 @@ def mark_raster(spike_data, n, duration, bursts, out_png, title):
         if s.size:
             ax.plot(s / 1000.0, np.full(s.size, order[i]), ".", ms=1.2,
                     color="#1f5fd0", alpha=0.6)
+    # burst duration bars in a strip above the raster (red = full,
+    # green = partial), each labeled with its participation rate
+    y_bar, y_txt = n * 1.03, n * 1.055
     for b in bursts:
         col = "#c0392b" if b["burst_class"] == "full" else "#2e8b57"
-        ax.axvspan(b["start_ms"] / 1000.0, b["end_ms"] / 1000.0,
-                   color=col, alpha=0.20, lw=0)
+        ax.plot([b["start_ms"] / 1000.0, b["end_ms"] / 1000.0], [y_bar, y_bar],
+                "-", color=col, lw=5, solid_capstyle="butt", clip_on=False)
+        ax.text(0.5 * (b["start_ms"] + b["end_ms"]) / 1000.0, y_txt,
+                "%.2f" % b["participation"], ha="center", va="bottom",
+                fontsize=7, color=col, clip_on=False)
     ax.set_xlim(0, duration / 1000.0)
-    ax.set_ylim(0, n)
+    ax.set_ylim(0, n * 1.10)
+    ax.spines["top"].set_visible(False)
+    ax.set_yticks([t for t in ax.get_yticks() if t <= n])
     ax.set_xlabel("time (s)")
     ax.set_ylabel("neuron (randomized)")
     ax.set_title(title)
