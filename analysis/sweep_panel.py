@@ -38,16 +38,21 @@ def median_burst_recording(meta):
 
 
 def raster(session, sd, figdir, meta):
+    """Burst-marked randomized-row raster of the median-burst recording
+    (duration bars + participation labels, via burst_stats.mark_raster)."""
+    from burst_stats import _an, mark_raster
     idx = median_burst_recording(meta)
     out = os.path.join(figdir, "recording%03d_raster_shuffled.png" % idx)
-    cmd = [sys.executable, os.path.join(HERE, "render_rasters.py"),
-           "--folder", sd, "--phenotype", STATE, "--sahp", "0.01",
-           "--indices", str(idx), "--out", figdir,
-           "--only-shuffled", "--dot-size", "4"]
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode:
-        print("  raster FAILED:\n%s" % r.stdout[-500:] + r.stderr[-500:])
-        return None
+    d = np.load(os.path.join(sd, "recording%03d.npz" % idx), allow_pickle=True)
+    st = d["spike_times"]
+    n = len(st)
+    spike_dict = {i: np.asarray(st[i], float) for i in range(n)}
+    dur = float(d["duration"])
+    bursts, _meta = _an.detect_network_bursts_all(spike_dict, n, dur)
+    nf = sum(1 for b in bursts if b["burst_class"] == "full")
+    mark_raster(spike_dict, n, dur, bursts, out,
+                "%s %s rec %03d -- %d full (red) + %d partial (green) network bursts"
+                % (session, STATE, idx, nf, len(bursts) - nf))
     print("  raster (median-burst rec %03d) -> %s" % (idx, out))
     return out
 
