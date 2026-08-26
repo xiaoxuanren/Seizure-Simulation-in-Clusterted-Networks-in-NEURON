@@ -50,11 +50,17 @@ def expected_sessions(sweep):
     return out
 
 
-def extract_job_tars(src):
-    """Extract per-job '<session>_r<idx>.tar' files (HTCondor-transfer layout)
-    found directly under --src into per-session folders, then leave the tars
-    in place (delete them yourself once a session collects OK)."""
+def extract_job_tars(src, sessions=None):
+    """Extract per-job '<session>[_<state>]_r<idx>.tar' files (HTCondor-transfer
+    layout) found directly under --src into per-session folders, then leave the
+    tars in place (delete them yourself once a session collects OK).
+    ``sessions`` limits extraction to those sessions' tars -- essential when
+    the download is larger than the free disk (extract+collect one session,
+    archive, strip, delete its tars, then the next)."""
     tars = sorted(_glob.glob(os.path.join(src, "*_r*.tar")))
+    if sessions:
+        prefixes = tuple(s + "_" for s in sessions)
+        tars = [t for t in tars if os.path.basename(t).startswith(prefixes)]
     for t in tars:
         try:
             with tarfile.open(t) as tf:
@@ -212,7 +218,7 @@ def main():
 
     sweep = load_sweep(a.sweep)
     state = sweep["state"]
-    extract_job_tars(a.src)
+    extract_job_tars(a.src, a.sessions)
     todo = expected_sessions(sweep)
     if a.sessions:
         todo = {k: v for k, v in todo.items() if k in set(a.sessions)}
