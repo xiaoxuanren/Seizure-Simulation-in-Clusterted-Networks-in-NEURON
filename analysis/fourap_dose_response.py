@@ -42,6 +42,21 @@ from session_paths import DATA, resolve, results_dir  # noqa: E402
 IC50_MM = 1.0
 DOSES_MM = [0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 9.0]      # -> f = 0, .2, .33, .5, .67, .8, .9
 
+# --- sAHP-deficit severity axis (the project's own seizure knobs) -----------
+# s = 0 -> normal state; s = 1 -> the chosen seizure state. Both knobs move
+# together along s, so intermediate values are graded severities of the same
+# manipulation rather than an arbitrary two-parameter grid.
+SAHP_SEVERITIES = [0.0, 0.25, 0.5, 0.75, 1.0]
+SAHP_AINC_NORMAL, SAHP_AINC_SEIZURE = 0.010, 0.004
+SAHP_TAU_NORMAL, SAHP_TAU_SEIZURE = 6500.0, 3000.0
+
+
+def sahp_params(severity):
+    """(ainc_slow, tau_slow) at severity s in [0, 1] (linear interpolation)."""
+    a = SAHP_AINC_NORMAL + severity * (SAHP_AINC_SEIZURE - SAHP_AINC_NORMAL)
+    t = SAHP_TAU_NORMAL + severity * (SAHP_TAU_SEIZURE - SAHP_TAU_NORMAL)
+    return float(a), float(t)
+
 _spec = importlib.util.spec_from_file_location(
     "_nsim_analysis", os.path.join(REPO, "neuron_simulation", "analysis.py"))
 _an = importlib.util.module_from_spec(_spec)
@@ -106,6 +121,32 @@ def run_dose(session, dose_mm, duration_ms, out_dir, _cache={}):
     return ph
 
 
+def run_severity(session, severity, duration_ms, _cache={}):
+    """One 60 s run with both sAHP knobs set to the given severity."""
+    from neuron_simulation.network_builder import build_network
+    from neuron_simulation.simulation import run_simulation
+    from neuron_simulation.noise import reseed_noise
+
+    if session not in _cache:
+        _cache[session] = session_cfg(session)
+    cfg, _sweep = _cache[session]
+    ainc, tau = sahp_params(severity)
+    build_kwargs = dict(cfg["build_kwargs"])
+    build_kwargs["sahp_ainc_slow"] = ainc
+    build_kwargs["sahp_tau_slow"] = tau
+    net = build_network(cfg["topology"], noise_seed=cfg["noise_seed_base"], **build_kwargs)
+    reseed_noise(net.noise, 0)
+    spikes, _v, _k = run_simulation(
+        net, duration=duration_ms, dt=cfg["dt"],
+        discard_transient_ms=cfg["discard_transient_ms"], record_voltage=False)
+    ph = phenotype(spikes, net.n_neurons, duration_ms)
+    ph.update(severity=severity, sahp_ainc_slow=ainc, sahp_tau_slow=tau)
+    print("  s=%.2f (ainc %.4f, tau %.0f): %.2f Hz | %.1f events/min | part %.2f | dur %.0f ms"
+          % (severity, ainc, tau, ph["rate_hz"], ph["events_per_min"],
+             ph["mean_participation"], ph["mean_duration_ms"]), flush=True)
+    return ph
+
+
 def reference_phenotype(session, state):
     """Phenotype of the session's saved recording000 in the given state."""
     d = np.load(os.path.join(resolve(session, state), "recording000.npz"),
@@ -126,25 +167,37 @@ def figure(all_results):
                ("events_per_min", "events per minute"),
                ("mean_participation", "mean participation"),
                ("mean_duration_ms", "mean burst duration (ms)")]
-    fig, axes = plt.subplots(2, 2, figsize=(12.4, 8.4))
-    for ax, (key, label) in zip(axes.ravel(), metrics):
-        for session, res in sorted(all_results.items()):
-            doses = [p["dose_mm"] for p in res["doses"]]
-            ax.plot(doses, [p[key] for p in res["doses"]], "o-", ms=5, lw=1.5,
-                    label="%s (4-AP ladder)" % session)
-            for state, col, ls in (("normal", "#1f5fd0", "--"), ("seizure", "#c0392b", "-")):
-                v = res.get(state, {}).get(key)
-                if v is not None and np.isfinite(v):
-                    ax.axhline(v, color=col, ls=ls, lw=1.2, alpha=0.6)
-        ax.set_xlabel("[4-AP] (mM), IC50 = %.1f mM for Kv4/I_A" % IC50_MM)
-        ax.set_ylabel(label)
-        ax.grid(alpha=0.3)
+    markers = ["o", "s", "^", "D"]
+    # rows = metrics, columns = the two manipulations on their own dose axes
+    fig, axes = plt.subplots(4, 2, figsize=(11.6, 13.4))
+    for row, (key, label) in enumerate(metrics):
+        ax4, axs = axes[row][0], axes[row][1]
+        for m, (session, res) in zip(markers, sorted(all_results.items())):
+            ax4.plot([p["dose_mm"] for p in res["doses"]],
+                     [p[key] for p in res["doses"]], m + "-", ms=5, lw=1.5,
+                     color="#7b3294", label=session)
+            if res.get("severities"):
+                axs.plot([p["severity"] for p in res["severities"]],
+                         [p[key] for p in res["severities"]], m + "-", ms=5, lw=1.5,
+                         color="#008837", label=session)
+        for ax in (ax4, axs):
+            for state, col, ls in (("normal", "#1f5fd0", "--"), ("seizure", "#c0392b", ":")):
+                vals = [r.get(state, {}).get(key) for r in all_results.values()]
+                vals = [v for v in vals if v is not None and np.isfinite(v)]
+                if vals:
+                    ax.axhline(float(np.mean(vals)), color=col, ls=ls, lw=1.4, alpha=0.75)
+            ax.set_ylabel(label)
+            ax.grid(alpha=0.3)
+        ax4.set_xlabel("[4-AP] (mM)  --  A-current block, IC50 %.1f mM" % IC50_MM)
+        axs.set_xlabel("sAHP-deficit severity s  (0 = normal, 1 = seizure state)")
+    axes[0][0].set_title("4-AP: block the A-current (Kv4)", fontsize=11)
+    axes[0][1].set_title("sAHP deficit: weaken + speed the slow AHP (KCa)", fontsize=11)
     axes[0][0].legend(fontsize=7)
-    fig.suptitle("4-AP (A-current block) dose ladder vs the sAHP seizure state\n"
-                 "dashed blue = normal state, solid red = seizure state "
-                 "(sahp_ainc_slow 0.004 + tau_slow 3000)", fontsize=10)
-    fig.tight_layout()
-    out = os.path.join(OUT, "fourap_dose_response.png")
+    fig.suptitle("Two routes to an epileptiform phenotype, same networks and noise\n"
+                 "dashed blue = measured normal state, dotted red = measured seizure state",
+                 fontsize=11)
+    fig.tight_layout(rect=[0, 0, 1, 0.965])
+    out = os.path.join(OUT, "fourap_vs_sahp_dose_response.png")
     fig.savefig(out, dpi=140, facecolor="white")
     print("figure -> %s" % out)
 
@@ -154,14 +207,25 @@ def main():
     ap.add_argument("sessions", nargs="+")
     ap.add_argument("--duration", type=float, default=60000.0)
     ap.add_argument("--doses", type=float, nargs="*", default=None)
+    ap.add_argument("--severities", type=float, nargs="*", default=None)
+    ap.add_argument("--skip-4ap", action="store_true",
+                    help="only run the sAHP severity ladder (reuse saved 4-AP results)")
     a = ap.parse_args()
     doses = a.doses if a.doses else DOSES_MM
+    severities = a.severities if a.severities else SAHP_SEVERITIES
 
     all_results = {}
     for session in a.sessions:
         print("%s (IC50 %.1f mM)" % (session, IC50_MM), flush=True)
+        prev = {}
+        prev_path = os.path.join(results_dir(session, "normal", "other"), "fourap_dose.json")
+        if a.skip_4ap and os.path.exists(prev_path):
+            with open(prev_path, encoding="utf-8") as fh:
+                prev = json.load(fh)
         res = {"session": session, "ic50_mm": IC50_MM,
-               "doses": [run_dose(session, d, a.duration, None) for d in doses]}
+               "doses": prev.get("doses") if a.skip_4ap and prev.get("doses")
+                        else [run_dose(session, d, a.duration, None) for d in doses]}
+        res["severities"] = [run_severity(session, s, a.duration) for s in severities]
         for state in ("normal", "seizure"):
             try:
                 res[state] = reference_phenotype(session, state)
