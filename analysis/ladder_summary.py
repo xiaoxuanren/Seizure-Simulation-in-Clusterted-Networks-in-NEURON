@@ -60,6 +60,8 @@ def load(src):
     for p in sorted(glob.glob(os.path.join(src, "ladder_*.json"))):
         with open(p, encoding="utf-8") as fh:
             rec = json.load(fh)
+        if "label" not in rec:          # e.g. the ladder config itself
+            continue
         fam, x = parse_point(rec)
         rec.pop("bursts", None)
         rec["family"] = fam
