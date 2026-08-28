@@ -68,6 +68,8 @@ def main():
     ap.add_argument("--point-idx", type=int, required=True)
     ap.add_argument("--out", default="results")
     ap.add_argument("--list-points", action="store_true")
+    ap.add_argument("--save-spikes", action="store_true",
+                    help="also save the spike train as npz (for raster rendering)")
     a = ap.parse_args()
 
     with open(a.ladder, encoding="utf-8") as fh:
@@ -108,6 +110,16 @@ def main():
         ph["max_ko_mM"] = float(np.max(ko["mean_ko"]))
         ph["mean_ko_mM"] = float(np.mean(ko["mean_ko"]))
     os.makedirs(a.out, exist_ok=True)
+    if a.save_spikes:
+        n = net.n_neurons
+        arr = np.empty(n, dtype=object)
+        for i in range(n):
+            arr[i] = np.asarray(spikes.get(i, []), dtype=np.float32)
+        np.savez_compressed(
+            os.path.join(a.out, "%s__%s_spikes.npz" % (a.session, point["label"])),
+            spike_times=arr, duration=duration, n_neurons=n,
+            label=point["label"], session=a.session,
+            overrides=json.dumps(point["overrides"]))
     out = os.path.join(a.out, "%s__%s.json" % (a.session, point["label"]))
     with open(out, "w", encoding="utf-8") as fh:
         json.dump(ph, fh, indent=1)

@@ -20,9 +20,10 @@ python3 chtc/ladder_one.py \
     --ladder "${LADDER}" \
     --session "${SESSION}" \
     --point-idx "${POINT_IDX}" \
+    --save-spikes \
     --out out
 
-# return exactly one JSON, named by session+point, at the sandbox root
+# return one tar with the phenotype JSON + the spike npz (spike-only, ~MBs)
 cd ..
-cp repo/out/*.json "ladder_${SESSION}_p${POINT_IDX}.json"
+tar cf "ladder_${SESSION}_p${POINT_IDX}.tar" -C repo/out .
 echo "job done: $(date -Is)"
