@@ -1,0 +1,32 @@
+# HTCondor submit file for mechanism ladders (chtc/ladder_mechanisms.json).
+# One job = one (network, ladder point). Outputs are small JSONs returned by
+# normal file transfer -- no /staging data, no tars to download.
+#
+#   python3 chtc/make_ladder_manifest.py        # writes ladder_jobs.txt + repo.tar.gz
+#   cd chtc && condor_submit ladder.local.sub   # after NetID patching
+# or simply: SWEEP=ladder bash chtc/submit_all.sh YOUR_NETID
+
+container_image = file:///staging/YOUR_NETID/neuron-sim.sif
+universe = container
+
+executable = ladder_job.sh
+arguments = $(session) $(pointidx) chtc/ladder_mechanisms.json
+
+transfer_input_files = repo.tar.gz
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_output_files = ladder_$(session)_p$(pointidx).json
+
+log    = logs/ladder_$(Cluster).log
+output = logs/ladder_$(session)_p$(pointidx).out
+error  = logs/ladder_$(session)_p$(pointidx).err
+
+request_cpus   = 1
+request_memory = 4GB
+request_disk   = 2GB
+
+# 180 s recordings: ~3.5 h/job
+max_retries = 3
+requirements = (Target.HasCHTCStaging == true)
+
+queue session,pointidx from ladder_jobs.txt
