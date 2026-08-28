@@ -22,8 +22,12 @@ SESSIONS=("$@")                 # optional session-name filter
 STAGING="/staging/${NETID}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-SWEEP="${SWEEP:-normal}"        # SWEEP=seizure selects the companion sweep
-if [ "${SWEEP}" = "seizure" ]; then
+SWEEP="${SWEEP:-normal}"        # seizure = companion sweep, ladder = mechanism ladders
+if [ "${SWEEP}" = "ladder" ]; then
+    CFG="${HERE}/ladder_mechanisms.json"
+    SUB_SRC="${HERE}/ladder.sub"
+    SUB_LOCAL="${HERE}/ladder.local.sub"
+elif [ "${SWEEP}" = "seizure" ]; then
     CFG="${HERE}/sweep_config_seizure.json"
     SUB_SRC="${HERE}/generate_seizure.sub"
     SUB_LOCAL="${HERE}/generate_seizure.local.sub"
@@ -69,7 +73,13 @@ fi
 mkdir -p "${STAGING}/neuron_sweeps" "${HERE}/logs"
 
 echo "== writing jobs.txt + repo.tar.gz"
-if [ "${#SESSIONS[@]}" -gt 0 ]; then
+if [ "${SWEEP}" = "ladder" ]; then
+    if [ "${#SESSIONS[@]}" -gt 0 ]; then
+        ( cd "${HERE}/.." && python3 chtc/make_ladder_manifest.py --sessions "${SESSIONS[@]}" )
+    else
+        ( cd "${HERE}/.." && python3 chtc/make_ladder_manifest.py )
+    fi
+elif [ "${#SESSIONS[@]}" -gt 0 ]; then
     echo "   (session filter: ${SESSIONS[*]})"
     ( cd "${HERE}/.." && python3 chtc/make_manifest.py --sweep "${CFG}" --sessions "${SESSIONS[@]}" )
 else

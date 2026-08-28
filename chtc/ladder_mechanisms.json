@@ -1,0 +1,184 @@
+{
+ "name": "mechanism_ladders",
+ "comment": "Three mechanism ladders on every sweep network: impaired K+ clearance (tau_k, alone and stacked on the sAHP seizure state), 4-AP as A-current block (IC50 1 mM for Kv4/I_A), and the sAHP-deficit severity axis. 180 s recordings so 4-AP-slice-scale ictal events (31-103 s) are measurable.",
+ "base_sweep": "chtc/sweep_config.json",
+ "duration_ms": 180000.0,
+ "record_ko": true,
+ "points": [
+  {
+   "label": "kclear_tau00200",
+   "overrides": {
+    "tau_k": 200.0
+   }
+  },
+  {
+   "label": "both_tau00200",
+   "overrides": {
+    "tau_k": 200.0,
+    "sahp_ainc_slow": 0.004,
+    "sahp_tau_slow": 3000.0
+   }
+  },
+  {
+   "label": "kclear_tau00500",
+   "overrides": {
+    "tau_k": 500.0
+   }
+  },
+  {
+   "label": "both_tau00500",
+   "overrides": {
+    "tau_k": 500.0,
+    "sahp_ainc_slow": 0.004,
+    "sahp_tau_slow": 3000.0
+   }
+  },
+  {
+   "label": "kclear_tau01000",
+   "overrides": {
+    "tau_k": 1000.0
+   }
+  },
+  {
+   "label": "both_tau01000",
+   "overrides": {
+    "tau_k": 1000.0,
+    "sahp_ainc_slow": 0.004,
+    "sahp_tau_slow": 3000.0
+   }
+  },
+  {
+   "label": "kclear_tau02500",
+   "overrides": {
+    "tau_k": 2500.0
+   }
+  },
+  {
+   "label": "both_tau02500",
+   "overrides": {
+    "tau_k": 2500.0,
+    "sahp_ainc_slow": 0.004,
+    "sahp_tau_slow": 3000.0
+   }
+  },
+  {
+   "label": "kclear_tau06000",
+   "overrides": {
+    "tau_k": 6000.0
+   }
+  },
+  {
+   "label": "both_tau06000",
+   "overrides": {
+    "tau_k": 6000.0,
+    "sahp_ainc_slow": 0.004,
+    "sahp_tau_slow": 3000.0
+   }
+  },
+  {
+   "label": "kclear_tau12000",
+   "overrides": {
+    "tau_k": 12000.0
+   }
+  },
+  {
+   "label": "both_tau12000",
+   "overrides": {
+    "tau_k": 12000.0,
+    "sahp_ainc_slow": 0.004,
+    "sahp_tau_slow": 3000.0
+   }
+  },
+  {
+   "label": "fourap_00.0mM",
+   "overrides": {
+    "gbar_kA_exc": 0.006,
+    "gbar_kA_inh": 0.004
+   },
+   "note": "0% A-current block ~ 0.00 mM 4-AP at IC50 1 mM"
+  },
+  {
+   "label": "fourap_00.2mM",
+   "overrides": {
+    "gbar_kA_exc": 0.0048,
+    "gbar_kA_inh": 0.0032
+   },
+   "note": "20% A-current block ~ 0.25 mM 4-AP at IC50 1 mM"
+  },
+  {
+   "label": "fourap_00.5mM",
+   "overrides": {
+    "gbar_kA_exc": 0.00402,
+    "gbar_kA_inh": 0.00268
+   },
+   "note": "33% A-current block ~ 0.50 mM 4-AP at IC50 1 mM"
+  },
+  {
+   "label": "fourap_01.0mM",
+   "overrides": {
+    "gbar_kA_exc": 0.003,
+    "gbar_kA_inh": 0.002
+   },
+   "note": "50% A-current block ~ 1.00 mM 4-AP at IC50 1 mM"
+  },
+  {
+   "label": "fourap_02.0mM",
+   "overrides": {
+    "gbar_kA_exc": 0.00198,
+    "gbar_kA_inh": 0.00132
+   },
+   "note": "67% A-current block ~ 2.00 mM 4-AP at IC50 1 mM"
+  },
+  {
+   "label": "fourap_04.0mM",
+   "overrides": {
+    "gbar_kA_exc": 0.0012,
+    "gbar_kA_inh": 0.0008
+   },
+   "note": "80% A-current block ~ 4.00 mM 4-AP at IC50 1 mM"
+  },
+  {
+   "label": "fourap_09.0mM",
+   "overrides": {
+    "gbar_kA_exc": 0.0006,
+    "gbar_kA_inh": 0.0004
+   },
+   "note": "90% A-current block ~ 9.00 mM 4-AP at IC50 1 mM"
+  },
+  {
+   "label": "sahp_s0.00",
+   "overrides": {
+    "sahp_ainc_slow": 0.01,
+    "sahp_tau_slow": 6500.0
+   }
+  },
+  {
+   "label": "sahp_s0.25",
+   "overrides": {
+    "sahp_ainc_slow": 0.0085,
+    "sahp_tau_slow": 5625.0
+   }
+  },
+  {
+   "label": "sahp_s0.50",
+   "overrides": {
+    "sahp_ainc_slow": 0.007,
+    "sahp_tau_slow": 4750.0
+   }
+  },
+  {
+   "label": "sahp_s0.75",
+   "overrides": {
+    "sahp_ainc_slow": 0.0055,
+    "sahp_tau_slow": 3875.0
+   }
+  },
+  {
+   "label": "sahp_s1.00",
+   "overrides": {
+    "sahp_ainc_slow": 0.004,
+    "sahp_tau_slow": 3000.0
+   }
+  }
+ ]
+}
