@@ -202,15 +202,71 @@ def figure(all_results):
     print("figure -> %s" % out)
 
 
+def main_point(a):
+    """Run ONE (session, dose|severity) point and write it to --point-out.
+
+    Each 60 s simulation costs ~70 CPU-minutes, so the ladder is run as one
+    process per point in parallel rather than sequentially; --combine then
+    merges the point files into the per-session JSON and the figure.
+    """
+    if a.point_kind == "dose":
+        ph = run_dose(a.point_session, a.point_value, a.duration, None)
+    else:
+        ph = run_severity(a.point_session, a.point_value, a.duration)
+    ph["session"] = a.point_session
+    ph["kind"] = a.point_kind
+    with open(a.point_out, "w", encoding="utf-8") as fh:
+        json.dump(ph, fh, indent=1)
+    print("point saved -> %s" % a.point_out)
+
+
+def main_combine(a):
+    """Merge point files from --combine into per-session JSONs + the figure."""
+    import glob as _g
+    points = []
+    for p in sorted(_g.glob(os.path.join(a.combine, "point_*.json"))):
+        with open(p, encoding="utf-8") as fh:
+            points.append(json.load(fh))
+    all_results = {}
+    for ph in points:
+        res = all_results.setdefault(ph["session"], {"session": ph["session"],
+                                                     "ic50_mm": IC50_MM,
+                                                     "doses": [], "severities": []})
+        res["doses" if ph["kind"] == "dose" else "severities"].append(ph)
+    for session, res in all_results.items():
+        res["doses"].sort(key=lambda p: p["dose_mm"])
+        res["severities"].sort(key=lambda p: p["severity"])
+        for state in ("normal", "seizure"):
+            try:
+                res[state] = reference_phenotype(session, state)
+            except Exception as exc:
+                print("  (no %s reference for %s: %s)" % (state, session, exc))
+        out = os.path.join(results_dir(session, "normal", "other"), "fourap_dose.json")
+        with open(out, "w", encoding="utf-8") as fh:
+            json.dump(res, fh, indent=1)
+        print("%s: %d doses + %d severities -> %s"
+              % (session, len(res["doses"]), len(res["severities"]), out))
+    figure(all_results)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("sessions", nargs="+")
+    ap.add_argument("sessions", nargs="*")
+    ap.add_argument("--point-session")
+    ap.add_argument("--point-kind", choices=["dose", "severity"])
+    ap.add_argument("--point-value", type=float)
+    ap.add_argument("--point-out")
+    ap.add_argument("--combine", help="directory of point_*.json files to merge")
     ap.add_argument("--duration", type=float, default=60000.0)
     ap.add_argument("--doses", type=float, nargs="*", default=None)
     ap.add_argument("--severities", type=float, nargs="*", default=None)
     ap.add_argument("--skip-4ap", action="store_true",
                     help="only run the sAHP severity ladder (reuse saved 4-AP results)")
     a = ap.parse_args()
+    if a.point_session:
+        return main_point(a)
+    if a.combine:
+        return main_combine(a)
     doses = a.doses if a.doses else DOSES_MM
     severities = a.severities if a.severities else SAHP_SEVERITIES
 
