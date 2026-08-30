@@ -9,8 +9,9 @@ spike-frequency-adaptation** mechanism (`sAHP`). The network is driven only by
 weak per-neuron Poisson background input and produces discrete,
 high-participation network bursts.
 
-**The seizure knob is a slow-AHP deficit (`sahp_ainc_slow`), not impaired K⁺
-clearance and not a reduced A-current.** `sahp_ainc_slow` is the Ca²⁺-dependent
+**The seizure knob is a two-parameter slow-AHP deficit (`sahp_ainc_slow`
+*and* `sahp_tau_slow`), not impaired K⁺ clearance and not a reduced
+A-current.** `sahp_ainc_slow` is the Ca²⁺-dependent
 slow-AHP per-spike conductance increment (a KCa conductance, *not* the
 Kv7/M-current). Normal is **pinned at 0.01 µS**; any **lower** value is a
 seizure state (the default 0.004 is a convenience, not a commitment). This
@@ -47,7 +48,7 @@ neuron_simulation/          # the simulator package
   topology.py               # clustered+hub AND log-normal-degree builders
   network_builder.py        # assemble a NEURON net from a topology (cells, synapses, NetCons, noise)
   noise.py                  # Poisson background; per-recording Random123 streams
-  states.py                 # normal vs seizure (sahp_ainc_slow); kclearance + gbar_block alternatives
+  states.py                 # normal vs seizure (sahp_ainc_slow + sahp_tau_slow); kclearance + gbar_block alternatives
   parameters.py             # the parameter registry (single source of defaults)
   simulation.py             # run(): finitialize/continuerun, spike + optional voltage + [K+]o recording
   workflows.py              # topology->network->run->save spikes + ground truth; dataset generation
@@ -154,10 +155,12 @@ from neuron_simulation import topology, workflows, states
 
 topo = topology.build_topology_lognormal(seed=1)          # preferred builder
 
-# Normal vs seizure: SAME network, one lower sahp_ainc_slow value.
-normal  = workflows.run_single_state(topo, state=states.normal_state())   # sahp_ainc_slow = 0.01
-seizure = workflows.run_single_state(topo, state=states.seizure_state())  # default 0.004; any value < 0.01
-# Lower knob -> more firing (0.29 -> 0.63 Hz on the 926-cell reference network);
+# Normal vs seizure: SAME network, TWO sAHP parameters changed.
+normal  = workflows.run_single_state(topo, state=states.normal_state())   # 0.010 uS, tau 6500 ms
+seizure = workflows.run_single_state(topo, state=states.seizure_state())  # 0.004 uS, tau 3000 ms
+# ainc  = recruitment depth  (participation 0.51 -> 0.95, firing 5.8x)
+# tau   = recovery clock     (bursts ~9.4 -> ~25.5 per 60 s recording)
+# Depth only, normal burst clock: states.seizure_state(0.004, states.NORMAL_SAHP_TAU_SLOW)
 # [K+]o stays ~4 mM in BOTH states (this is the mild-[K+]o phenotype).
 
 # Generate an inference-ready dataset (normal state):
@@ -236,7 +239,8 @@ before sAHP loads.
 
 | parameter | default | role |
 |-----------|---------|------|
-| `sahp_ainc_slow` | `0.01` µS (normal, pinned) | **the seizure knob** — slow-AHP (KCa) per-spike increment; any lower value is a seizure |
+| `sahp_ainc_slow` | `0.01` µS (normal, pinned) | **seizure knob, part 1** — slow-AHP (KCa) per-spike increment; lower = deeper recruitment |
+| `sahp_tau_slow` | `6500` ms (normal, pinned) | **seizure knob, part 2** — slow-AHP decay; shorter = faster burst clock |
 | `noise_weight` | `0.004` µS | single background event — suprathreshold on a rested cell, ~0.49× the adapted rheobase at the operating point (see above) |
 | `noise_rate` | `5.0` Hz | per-neuron Poisson background (the sole drive) |
 | `exc_weight_scale` | `2.0` | recurrent gain |
@@ -292,22 +296,47 @@ multi-compartment neuron), which is out of scope here.
 
 ### The seizure mechanism (slow-AHP deficit)
 
-Seizure is modelled by a **single knob**: `sahp_ainc_slow`, the Ca²⁺-dependent
-slow-AHP per-spike conductance increment. One fixed network, one parameter, two
-phenotypes (authoritative source: the `neuron_simulation/states.py` module
-docstring):
+Seizure is modelled by a **two-parameter knob**, both parameters on the
+Ca²⁺-dependent slow AHP (authoritative source: the
+`neuron_simulation/states.py` module docstring):
 
-- **Normal** — `sahp_ainc_slow = 0.01` µS (strong slow adaptation; **pinned**:
-  it is what the shipped 50-minute flagship session was generated with). Quiet,
-  sparse loose bursts; [K⁺]ₒ stays ~4 mM. `states.normal_state()`.
-- **Seizure** — any **lower** `sahp_ainc_slow` (weak slow adaptation; more
-  firing, denser bursts). Seizure is defined as "less slow adaptation than
-  normal", not as one blessed number — the default `0.004` is a convenience.
-  Measured on the 926-cell seed-1 reference network (60 s): `0.010` → 0.29 Hz
-  firing, 8 loose bursts (0.13 Hz), participation 0.93; `0.004` → 0.63 Hz,
-  10 bursts (0.17 Hz), participation 1.00 — lower knob → more firing,
-  monotonically. `states.seizure_state(value)`;
-  `states.seizure_dose_response()` sweeps the knob.
+| parameter | normal | seizure | what it controls |
+|-----------|--------|---------|------------------|
+| `sahp_ainc_slow` | `0.010` µS | `0.004` µS | **recruitment depth** — how much brake each spike adds |
+| `sahp_tau_slow` | `6500` ms | `3000` ms | **recovery clock** — how long the brake lasts, i.e. burst frequency |
+
+The two are **separable** and were measured separately: `ainc` alone gives
+full-recruitment bursts at the original ~11/min rhythm, while `tau` is the
+frequency dial (burst rate scales roughly as `6500/tau`). Everything else —
+topology, drive, `tau_k`, `sahp_ainc_fast`, `gbar_kA_*`, and the per-recording
+noise streams — is identical between states.
+
+**Measured normal → seizure across all 20 sweep networks** (200 × 60 s
+recordings per network per state, paired noise streams):
+
+| metric | normal | seizure | change |
+|--------|--------|---------|--------|
+| firing rate | 0.30 Hz | 1.72 Hz | 5.8× |
+| network bursts per 60 s | 9.4 | 25.5 | 2.7× |
+| burst participation | 0.51 | 0.95 | 1.9× |
+| burst duration | 149 ms | 442 ms | 3.0× |
+
+Note that the `ainc` change **erases the topology-dependent spread** in
+participation: across networks it is 0.27–0.91 in the normal state but
+0.90–0.99 in seizure. `states.normal_state()`, `states.seizure_state(ainc,
+tau)`; `states.seizure_dose_response()` sweeps the depth parameter.
+
+**It is not a 4-AP model, and this was tested rather than asserted.** Blocking
+the A-current (4-AP's only target in this model) was measured across a 0–9 mM
+equivalent ladder on 20 networks and left every phenotype axis flat
+(`analysis/fourap_dose_response.py`). Impaired K⁺ clearance does not reach the
+ictal regime either: raising `tau_k` *suppresses* bursting (participation
+0.95 → 0.16 as [K⁺]ₒ climbs to 12–16 mM) rather than lengthening events
+(`analysis/tauk_ictal_ladder.py`). The phenotype reproduced here matches the
+4-AP **culture/MEA** signature (higher rate, more frequent and more
+synchronous bursts; published fold-change ~3.6× vs ~3.2× at severity 0.75 in
+this model) but **not** the 4-AP **slice ictal** regime (31–103 s discharges);
+events in this model top out below 1 s.
 
 **Channel identity (mind this before citing the knob).** With
 `tau_slow = 6500 ms`, the knob is by both kinetics and pharmacology the

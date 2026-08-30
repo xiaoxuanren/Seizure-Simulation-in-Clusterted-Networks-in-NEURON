@@ -121,7 +121,8 @@ def run_one_recording(cfg, rec_idx):
             import matplotlib.pyplot as plt
             from neuron_simulation import plotting
             session_dir = os.path.join(cfg["save_dir"], cfg["timestamp"])
-            # Title carries the single knob (sahp_ainc_slow) so normal vs seizure
+            # Title carries the seizure knob (sahp_ainc_slow; see also sahp_tau_slow)
+            # so normal vs seizure
             # runs are distinguishable: both use state_name "normal" (same K+
             # buffering) and differ ONLY by this adaptation strength.
             _sahp = cfg["build_kwargs"].get("sahp_ainc_slow")
