@@ -100,6 +100,40 @@ settings, `fdr_threshold`, `sum4_W`) imported by `fdr_duration_200_worker.py`,
 | `voltage_traces.py` | Vm during vs outside a network burst; connected-pair traces + spike-triggered EPSP/IPSP |
 | `render_rasters.py` | re-renders saved rasters with corrected title/dot size (CLI: `--folder --phenotype --dot-size ...`) |
 
+### FOV maps (imaging-style figures)
+
+Two-photon-style field-of-view figures: a synthetic grayscale background with
+neuron-like morphology (somata and neurites drawn at the *real* simulated
+neuron positions, fibre fascicles routed along real connections, plus purely
+cosmetic unlabeled background cells — `--decor-cells 0` disables them),
+overlaid with one irregular colored ROI per neuron. Everything quantitative
+(positions, rates, participation, colorbar) comes from the session npz files;
+only the gray morphology is synthesized. Positions are in abstract space
+units, mapped to a 1000 µm field by default (`--fov-um`), which is what makes
+the 100 µm scale bar meaningful.
+
+| script | what it does |
+|---|---|
+| `fov_rate_map.py` | renders one session's map; `--metric rate` (default) colors ROIs by mean firing rate in Hz with an auto 5th–95th-percentile colorbar, `--metric participation` colors by the % of pooled `burst_windows` each neuron spiked in, on a fixed 0–100 scale; pools all recordings unless `--recording N`; `load_session()` returns `(positions, connections, rates_hz, participation_pct, meta)` for reuse |
+| `fov_rate_map_sweep.py` | batch driver over the `sweep_c40_*` / `sweep_c50_*` sessions (normal + seizure per sweep, multiprocess): the background RNG seed is derived from the sweep name so both states of a pair share a pixel-identical background; `--shared-scale` pools normal+seizure rates for one colorbar per pair; `--metric participation` for the burst-participation set; `--only <substring>` filters sweeps |
+| `fov_composite.py` | publication-style composite for one session: main FOV panel (200 µm bar) with four dashed boxes, four zoom panels with matching dashed borders (20 µm bar), colorbar, and a cluster-sorted spike raster whose dots carry each neuron's map color (`--recording` picks the raster trial); zoom regions are auto-picked from cluster stats (lowest/highest mean, most heterogeneous, largest); ROI shapes are deterministic per neuron so main and zoom panels match |
+| `rate_histograms.py` | per-sweep overlaid normal-vs-seizure histograms of per-neuron mean firing rates (same pooled numbers as the FOV maps) with Gaussian fits; writes a linear-axis panel (`results/rate_histogram.png` -- honest but needle-vs-hump, since seizure both shifts ~6x and broadens ~20x) and a log-axis companion (`rate_histogram_logx.png`, lognormal fits, both states read as comparable humps); collected in `sweep_summary/rate_histograms/` |
+| `predicted_connectivity_map.py` | GLM-predicted wiring (`pred_adjacency` from `results/<state>/glm/glm_connectivity_sum4_5ms.npz`) on a **white** background with every edge colored by correctness against ground truth (TP green / FP red / FN orange dotted, same palette and definitions as `glm_predicted_topology.py`) and TP/FP/FN counts + P/R/F1 in the on-figure legend; node colormaps deliberately avoid those hues and differ per metric -- firing rate = 'cool' (cyan->magenta), burst participation = truncated 'Blues' (pale->navy, 0-100 %); override with `--cmap` / `--cmap-participation`; writes `results/<state>/figures/predicted_connectivity_{rate,participation}.png`, collected in `sweep_summary/predicted_connectivity/` |
+| `rate_operating_point_scan.py` | NEURON parameter scan (needs the py3.9 NEURON env): rebuilds the flagship c50_seed01 network and sweeps the background-drive knobs (`noise_rate`, `noise_weight`) with everything else fixed, one short recording per grid point (shared noise stream), logging per-neuron rate stats + burst rate to `scan_results.jsonl` -- used to find the operating point matching real-data firing rates (~0.7-1 Hz) without touching the seizure knob |
+
+Outputs (note: these land **next to the raw data**, not under `results/` —
+the one deliberate exception to the raw-data-folders-hold-only-data rule, so
+each state's map sits beside its recordings; a browsing copy of every render
+is also collected centrally):
+
+```
+<sweep>/<state>/fov_rate_map.png            per-state colour scale
+<sweep>/<state>/fov_rate_map_shared.png     common scale per pair (--shared-scale)
+<sweep>/<state>/fov_participation_map.png   burst participation, 0-100 %
+<sweep>/<state>/fov_<metric>_composite.png  composite (FOV + zooms + raster)
+notebooks/NEURON data parallel/sweep_summary/fov_rate_maps/   collected copies
+```
+
 ### Characterization
 
 | script | what it does |
