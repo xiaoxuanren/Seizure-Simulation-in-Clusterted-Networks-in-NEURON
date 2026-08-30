@@ -8,7 +8,7 @@ Five custom NEURON mechanisms back the biophysics of this project:
 | `kdyn.mod` | `kdyn` (density) | Dynamic [K⁺]ₒ accumulation → writes `ek` (Nernst). `tau_k` is the retained *alternative* ictal route, **not** the project's seizure knob (see below). |
 | `DepSyn.mod` | `DepSyn` (point process) | Depressing excitatory synapse (Tsodyks–Markram short-term depression; `d=0` ⇒ static). Fallback when `synapse_model != "ampa_nmda"`. |
 | `AmpaNmda.mod` | `AmpaNmda` (point process) | Two-component (fast AMPA + slow voltage-dependent NMDA) depressing excitatory synapse — the **default** excitatory synapse (`synapse_model="ampa_nmda"` in `network_builder.py`); the NMDA component sustains realistic 200–800 ms bursts. |
-| `sAHP.mod` | `sAHP` (point process) | Two-timescale spike-triggered adaptation: fast SFA (M-current/Kv7-like) + slow Ca²⁺-dependent AHP. **The slow component's per-spike increment `sahp_ainc_slow` is the project's seizure knob.** |
+| `sAHP.mod` | `sAHP` (point process) | Two-timescale spike-triggered adaptation: fast SFA (M-current/Kv7-like) + slow Ca²⁺-dependent AHP. **The slow component carries the project's two-parameter seizure knob: `sahp_ainc_slow` (depth) and `sahp_tau_slow` (recovery clock).** |
 
 Inhibitory synapses use NEURON's built-in `ExpSyn` (reversal −75 mV) and the
 soma uses the built-in `hh` mechanism, so these five files are all that need
@@ -50,17 +50,25 @@ rm -f nrnmech.dll mechanisms/*.c mechanisms/*.o mechanisms/mod_func.*
 The generated build artifacts (`x86_64/`, `nrnmech.dll`, `*.c`, `*.o`) are
 git-ignored — only the `.mod` source is tracked.
 
-## The seizure knob is `sahp_ainc_slow` (in `sAHP.mod`), not `tau_k` or `gbar_kA`
+## The seizure knob is the slow AHP in `sAHP.mod` — TWO parameters
 
-The project's seizure mechanism is a single knob: the Ca²⁺-dependent slow-AHP
-per-spike increment `sahp_ainc_slow` in `sAHP.mod` (a KCa conductance, **not**
-the M-current/Kv7 — that is the fast component `sahp_ainc_fast`, held fixed).
+The project's seizure mechanism lives entirely in the slow component of
+`sAHP.mod` (a Ca²⁺-dependent KCa conductance, **not** the M-current/Kv7 —
+that is the fast component `sahp_ainc_fast`, held fixed), and it is **two
+parameters**, not one:
 
-- Normal: `sahp_ainc_slow = 0.01` (strong slow adaptation; pinned — the shipped
-  flagship session was generated with it).
-- Seizure: any **lower** value (weak slow adaptation → more firing, denser
-  bursts; the default 0.004 is a convenience, not a commitment). This models an
-  acquired-epilepsy sAHP deficit — the adaptation-deficit, mild-[K⁺]ₒ phenotype.
+| parameter | normal | seizure | controls |
+|-----------|--------|---------|----------|
+| `sahp_ainc_slow` | `0.010` µS | `0.004` µS | recruitment depth (participation 0.51 → 0.95) |
+| `sahp_tau_slow` | `6500` ms | `3000` ms | recovery clock → burst rate (9.4 → 25.5 per 60 s) |
+
+They are separable: `ainc` alone gives full-recruitment bursts at the original
+~11/min rhythm; `tau` is the frequency dial (rate ≈ `6500/tau`). Together they
+model an acquired-epilepsy sAHP deficit — the adaptation-deficit, mild-[K⁺]ₒ
+phenotype. Both are pinned in `states.py` (`NORMAL_SAHP_SLOW`,
+`NORMAL_SAHP_TAU_SLOW`, `DEFAULT_SEIZURE_SAHP_SLOW`,
+`DEFAULT_SEIZURE_SAHP_TAU_SLOW`); the shipped seizure datasets used the
+seizure column above.
 
 `kdyn` still supplies the [K⁺]ₒ substrate (firing raises [K⁺]ₒ → `ek`
 depolarizes (Nernst) → positive feedback; clearance `tau_k` is the negative

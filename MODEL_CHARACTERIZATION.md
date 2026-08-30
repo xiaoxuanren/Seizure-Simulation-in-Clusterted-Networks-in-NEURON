@@ -264,7 +264,15 @@ isolates the first by pinning the second. Measured effect of the knob: rate
 measured range is 3.99–4.29 mM, never ictal.
 
 **Phrasing.** `tau_k` **is** a knob that reaches [K⁺]ₒ — it is held fixed. It is
-`sahp_ainc_slow`, the single knob, that cannot reach [K⁺]ₒ directly.
+the sAHP knob (`sahp_ainc_slow` + `sahp_tau_slow`) that cannot reach [K⁺]ₒ
+directly.
+
+**Verified 2026-08 (20 networks, ladder runs).** Raising `tau_k` on top of the
+seizure state does drive [K⁺]ₒ to 12–16 mM, but it *suppresses* network
+bursting rather than producing ictal events — participation falls 0.95 → 0.16
+and inter-burst intervals stretch from 2.4 s to ~18 s, the signature of
+depolarization block. See `analysis/tauk_ictal_ladder.py` and
+`sweep_summary/ladder_ictal_test.png`.
 
 ### D.2 `sAHP` is `NONSPECIFIC_CURRENT` with a private `ek = −90 mV`
 
@@ -399,7 +407,7 @@ mod file has always assigned Kv7 to the *fast* component.
 | component | timescale | carrier | this model |
 |---|---|---|---|
 | mAHP | 50–100 ms | Kv7/KCNQ (I_M) + SK | `sahp_ainc_fast`, τ 300 ms — **held fixed** |
-| sAHP | 1–5 s (I_sAHP τ ≈ 2.9 s) | Ca²⁺-dependent KCa, likely KCa3.1 | `sahp_ainc_slow`, τ 6500 ms — **the knob** |
+| sAHP | 1–5 s (I_sAHP τ ≈ 2.9 s) | Ca²⁺-dependent KCa, likely KCa3.1 | `sahp_ainc_slow` + `sahp_tau_slow` (6500 ms normal / 3000 ms seizure) — **the two-parameter knob** |
 
 Kv7/M channels activate subthreshold from about −60 mV with gating on tens of
 milliseconds and do not inactivate; they cannot produce a 6.5 s decay. The
@@ -479,3 +487,42 @@ modelling convenience, not a literal mapping.
   model brackets the cited culture value. The caveat described an earlier regime.
 - `noise.py` docstring claimed ~0.07 Hz noise-only firing, unmeasured and derived
   at an older weight. Measured **0.2355 Hz** at `noise_weight = 0.007`.
+
+---
+
+## G. Scope: what this model reproduces relative to the 4-AP literature
+
+Measured 2026-08 with the mechanism ladders (`analysis/fourap_dose_response.py`,
+`analysis/tauk_ictal_ladder.py`, `chtc/ladder_mechanisms.json`; 24 parameter
+points × 20 networks, 180 s recordings, figures in `sweep_summary/`).
+
+**The seizure knob is not 4-AP, and that was tested.** 4-AP blocks voltage-gated
+Kv channels — Kv1/D-type at the low-µM concentrations used in slice models, and
+Kv4/A-type only near 1 mM (IC₅₀ ≈ 1 mM; Kd 0.9 ± 0.07 mM for Kv4.2 tonic block
+at −80 mV). The project's knob is the Ca²⁺-dependent slow AHP, a KCa
+conductance that is classically 4-AP-**insensitive**. Simulating 4-AP directly
+(A-current block, 0 → 90%, ≈ 0–9 mM equivalent) left every phenotype axis flat
+across 20 networks: firing rate 0.30 → 0.30 Hz, event duration 146 → 156 ms.
+There is therefore **no 4-AP dose equivalent** for the seizure state.
+
+**What the model does reproduce: the 4-AP culture/MEA signature.** The published
+culture response to 4-AP is higher mean firing rate, more frequent network
+bursts, and greater synchrony; the clearest quantitative anchor is MFR
+0.53 → 1.90 Hz (≈3.6×). The sAHP severity axis reproduces this: 3.2× at
+severity 0.75 and 5.8× at the shipped seizure state, with burst rate
+9.4 → 25.5 per 60 s and participation 0.51 → 0.95.
+
+**What it does not reproduce: the 4-AP slice ictal regime.** Slice studies
+report ictal discharges of 31–103 s recurring on ~26 s intervals, with
+interictal events of 1–2 s. This model's events top out below 1 s (seizure
+mean 442 ms, longest observed ~830 ms). Impaired K⁺ clearance — the mechanism
+slice ictogenesis depends on, together with interneuron depolarization block —
+does raise [K⁺]ₒ into the ictal range (12–16 mM) but **suppresses** bursting
+rather than sustaining it (participation 0.95 → 0.16, IBI 2.4 s → ~18 s).
+
+**Interpretation.** The model reaches the ingredients of slice ictogenesis
+(high [K⁺]ₒ, depolarization block) without producing sustained discharges.
+Sustained ictal events plausibly require mechanisms this single-compartment
+model lacks: dendritic compartments, activity-dependent GABA reversal shifts,
+and spatially resolved K⁺ diffusion. Claims from this model should be scoped to
+**culture-scale epileptiform dynamics**, not slice ictal phenomenology.

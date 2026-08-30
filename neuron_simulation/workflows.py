@@ -241,7 +241,8 @@ def generate_dataset(
         "voltage_storage_backend": voltage_storage_backend if record_voltage else None,
         "state": state,
         # Provenance: the RESOLVED build parameters actually used. Without this the
-        # single knob (sahp_ainc_slow) is not recorded anywhere in a saved session.
+        # seizure knob (sahp_ainc_slow + sahp_tau_slow) is not recorded anywhere
+        # in a saved session.
         "build_kwargs": {k: v for k, v in build_kwargs.items()},
         # Self-describing provenance: every resolved parameter with its units,
         # meaning, and effect of increasing (from neuron_simulation/parameters.py).

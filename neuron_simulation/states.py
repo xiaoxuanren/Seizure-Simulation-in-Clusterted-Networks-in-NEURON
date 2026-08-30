@@ -1,16 +1,39 @@
 """Pharmacological / pathophysiological states.
 
-The seizure mechanism in this project is a **single knob**: the Ca2+-dependent
-slow-AHP per-spike increment ``sahp_ainc_slow``. One fixed network, one
-parameter, two phenotypes:
+The seizure mechanism in this project is a **two-parameter knob**, both
+parameters on the Ca2+-dependent slow AHP. One fixed network, two parameters,
+two phenotypes:
 
-* ``normal_state``  -> ``sahp_ainc_slow = 0.01`` (strong slow adaptation;
-  quiet, sparse loose bursts; [K+]o stays ~4 mM). This value is PINNED: it is the
-  one the shipped 50-minute flagship session was generated with.
-* ``seizure_state(value)`` -> **any LOWER** ``sahp_ainc_slow`` (weak slow
-  adaptation; more firing, denser bursts). Seizure is defined as "less slow
-  adaptation than normal", not as one blessed number -- pass whatever value you
-  want. The default (0.004) is a convenience, not a commitment.
+* ``normal_state``  -> ``sahp_ainc_slow = 0.01``, ``sahp_tau_slow = 6500 ms``
+  (strong, long-lasting slow adaptation; quiet, sparse loose bursts; [K+]o
+  stays ~4 mM). PINNED: these are what the shipped flagship session used.
+* ``seizure_state(ainc, tau)`` -> **lower** ``sahp_ainc_slow`` and/or
+  **shorter** ``sahp_tau_slow``. The shipped seizure datasets use
+  ``0.004 uS + 3000 ms``.
+
+THE TWO PARAMETERS DO DIFFERENT THINGS (measured, 20 networks, 2026-08):
+
+    sahp_ainc_slow  DEPTH of adaptation -> RECRUITMENT.  0.010 -> 0.004 takes
+                    burst participation 0.51 -> 0.95 and firing rate 5.8x up,
+                    and erases the topology-dependent participation spread
+                    (normal 0.27-0.91 across networks -> seizure 0.90-0.99).
+    sahp_tau_slow   DURATION of adaptation -> RECOVERY CLOCK, i.e. burst
+                    FREQUENCY, scaling roughly as 6500/tau. 6500 -> 3000 ms
+                    takes ~11 -> ~24 bursts/min with participation unchanged.
+
+Measured normal -> seizure across all 20 networks (paired noise streams):
+firing rate 0.30 -> 1.72 Hz (5.8x), bursts 9.4 -> 25.5 per 60 s recording
+(2.7x), participation 0.51 -> 0.95, burst duration 149 -> 442 ms (3.0x).
+
+NOT 4-AP: blocking the A-current (4-AP's only target in this model) was
+measured across 0-9 mM equivalent on 20 networks and left every phenotype
+axis flat -- see analysis/fourap_dose_response.py and the ladder figures.
+NOT the K+-clearance ictal route either: raising tau_k SUPPRESSES bursting
+(participation 0.95 -> 0.16 as [K+]o reaches 12-16 mM), it does not lengthen
+events -- see analysis/tauk_ictal_ladder.py. The phenotype produced here
+matches the 4-AP CULTURE/MEA signature (higher rate, more frequent and more
+synchronous bursts) but not the 4-AP SLICE ictal regime (31-103 s
+discharges); this model's events top out below 1 s.
 
 CHANNEL IDENTITY -- read this before citing the knob in a talk or paper.
 ``sahp_ainc_slow`` has ``tau_slow = 6500 ms``, which by both kinetics and
@@ -84,6 +107,17 @@ DEFAULT_SEIZURE_SAHP_SLOW = 0.004
 #: Back-compat alias.
 SEIZURE_SAHP_SLOW = DEFAULT_SEIZURE_SAHP_SLOW
 
+#: THE SECOND HALF OF THE KNOB -- slow-AHP decay time constant (ms), i.e. how
+#: long each spike's brake lasts. It sets the RECOVERY CLOCK between population
+#: events: measured burst rate scales as ~ NORMAL_SAHP_TAU_SLOW / tau, so
+#: 6500 -> 3000 ms roughly doubles the burst rate (11 -> 24 /min) while leaving
+#: participation untouched. `sahp_ainc_slow` sets recruitment DEPTH; this sets
+#: burst FREQUENCY. Together they are the project's two-parameter seizure knob.
+NORMAL_SAHP_TAU_SLOW = 6500.0
+#: Only a DEFAULT for :func:`seizure_state`; any value below normal shortens
+#: the recovery clock. The shipped seizure datasets used 3000 ms.
+DEFAULT_SEIZURE_SAHP_TAU_SLOW = 3000.0
+
 #: Held FIXED across states (the tuned operating base; see the notebooks).
 BASE_SAHP_FAST = 0.005
 BASE_TAU_K = 200.0
@@ -124,11 +158,12 @@ def normal_state():
         "tau_k": BASE_TAU_K,
         "sahp_ainc_fast": BASE_SAHP_FAST,
         "sahp_ainc_slow": NORMAL_SAHP_SLOW,
+        "sahp_tau_slow": NORMAL_SAHP_TAU_SLOW,
     }
 
 
-def _state(sahp_ainc_slow, state_name):
-    """Build a state dict differing from normal ONLY in ``sahp_ainc_slow``."""
+def _state(sahp_ainc_slow, state_name, sahp_tau_slow=NORMAL_SAHP_TAU_SLOW):
+    """Build a state dict differing from normal ONLY in the two sAHP knobs."""
     return {
         "state_name": state_name,
         "gbar_kA_exc": NORMAL_GBAR_KA_EXC,
@@ -136,31 +171,55 @@ def _state(sahp_ainc_slow, state_name):
         "tau_k": BASE_TAU_K,
         "sahp_ainc_fast": BASE_SAHP_FAST,
         "sahp_ainc_slow": float(sahp_ainc_slow),
+        "sahp_tau_slow": float(sahp_tau_slow),
     }
 
 
-def seizure_state(sahp_ainc_slow=DEFAULT_SEIZURE_SAHP_SLOW):
-    """Return build overrides for a seizure state: the SAME network, lower slow AHP.
+def seizure_state(sahp_ainc_slow=DEFAULT_SEIZURE_SAHP_SLOW,
+                  sahp_tau_slow=DEFAULT_SEIZURE_SAHP_TAU_SLOW):
+    """Return build overrides for a seizure state: the SAME network, TWO sAHP changes.
 
-    Seizure here means only "less slow adaptation than normal" -- a reduced
-    Ca2+-dependent sAHP, as seen in post-status-epilepticus hippocampus (see the
-    module docstring; this is NOT a Kv7/KCNQ manipulation). There is no blessed
-    seizure number -- pass whatever value you want to study. Everything else
-    (``tau_k``, ``sahp_ainc_fast``, ``gbar_kA_*``) is identical to
-    :func:`normal_state`, so any difference in the resulting activity is
-    attributable to this one parameter.
+    THE SEIZURE KNOB IS TWO PARAMETERS, both on the Ca2+-dependent slow AHP:
+
+      * ``sahp_ainc_slow`` (uS) -- the per-spike increment: how much brake each
+        spike adds. Sets RECRUITMENT DEPTH. Lowering 0.010 -> 0.004 takes burst
+        participation from ~0.5 to ~0.95 and firing rate ~5.8x up, and it
+        ERASES the topology-dependent spread in participation (measured across
+        20 networks: normal 0.27-0.91, seizure 0.90-0.99).
+      * ``sahp_tau_slow`` (ms) -- the decay constant: how long that brake
+        lasts. Sets the RECOVERY CLOCK, i.e. burst FREQUENCY, roughly as
+        6500/tau. Shortening 6500 -> 3000 ms takes ~11 -> ~24 bursts/min with
+        participation unchanged.
+
+    The two are separable and were measured separately (2026-08 previews):
+    ``ainc`` alone gives full-recruitment bursts at the original ~11/min
+    rhythm; ``tau`` alone is the frequency dial. The shipped seizure datasets
+    use BOTH (0.004 uS + 3000 ms).
+
+    Biologically this is an acquired sAHP deficit -- reduced Ca2+-dependent K+
+    (KCa) conductance as reported in post-status-epilepticus hippocampus (see
+    the module docstring; NOT a Kv7/KCNQ manipulation, and NOT a 4-AP model:
+    A-current block was measured to leave this network's phenotype unchanged
+    across 0-9 mM equivalent, 20 networks). Everything else (``tau_k``,
+    ``sahp_ainc_fast``, ``gbar_kA_*``, topology, drive, noise streams) is
+    identical to :func:`normal_state`, so any difference in the resulting
+    activity is attributable to these two parameters.
 
     Args:
-        sahp_ainc_slow: The slow-AHP per-spike increment (uS) for this seizure
-            state. Must be in ``[0, NORMAL_SAHP_SLOW)`` -- i.e. strictly weaker
-            adaptation than normal. ``0`` removes the slow AHP entirely (the most
-            severe case). Defaults to :data:`DEFAULT_SEIZURE_SAHP_SLOW`.
+        sahp_ainc_slow: The slow-AHP per-spike increment (uS). Must be in
+            ``[0, NORMAL_SAHP_SLOW)`` -- strictly weaker adaptation than
+            normal. ``0`` removes the slow AHP entirely (most severe).
+            Defaults to :data:`DEFAULT_SEIZURE_SAHP_SLOW` (0.004).
             For a relative depth, pass e.g. ``NORMAL_SAHP_SLOW * 0.4``.
+        sahp_tau_slow: The slow-AHP decay constant (ms). Defaults to
+            :data:`DEFAULT_SEIZURE_SAHP_TAU_SLOW` (3000). Pass
+            :data:`NORMAL_SAHP_TAU_SLOW` (6500) to change ONLY the depth and
+            keep the normal burst clock.
 
     Returns:
-        A dict identical to :func:`normal_state` except for ``sahp_ainc_slow``
-        and ``state_name`` (which embeds the value, so it lands in the saved
-        session metadata).
+        A dict identical to :func:`normal_state` except for
+        ``sahp_ainc_slow``, ``sahp_tau_slow`` and ``state_name`` (which embeds
+        both values, so they land in the saved session metadata).
 
     Raises:
         ValueError: If ``sahp_ainc_slow`` is negative or not below
@@ -178,7 +237,13 @@ def seizure_state(sahp_ainc_slow=DEFAULT_SEIZURE_SAHP_SLOW):
             f"seizure_state({DEFAULT_SEIZURE_SAHP_SLOW:g}) or "
             f"seizure_state(NORMAL_SAHP_SLOW * 0.4)."
         )
-    return _state(value, f"seizure_sahp{value:g}")
+    tau = float(sahp_tau_slow)
+    if tau <= 0.0:
+        raise ValueError("sahp_tau_slow must be > 0 (ms).")
+    name = f"seizure_sahp{value:g}"
+    if tau != NORMAL_SAHP_TAU_SLOW:
+        name += f"_tau{tau:g}"
+    return _state(value, name, sahp_tau_slow=tau)
 
 
 def seizure_dose_response(values=None, n_points=5,
