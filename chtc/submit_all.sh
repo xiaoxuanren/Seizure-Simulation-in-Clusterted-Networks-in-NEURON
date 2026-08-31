@@ -25,6 +25,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SWEEP="${SWEEP:-normal}"        # seizure = companion sweep, ladder = mechanism ladders,
                                 # analysis = spike-only duration grid
 if [ "${SWEEP}" = "analysis" ]; then
+    CFG="${HERE}/analysis_jobs.txt"
     SUB_SRC="${HERE}/analysis.sub"
     SUB_LOCAL="${HERE}/analysis.local.sub"
 elif [ "${SWEEP}" = "ladder" ]; then
