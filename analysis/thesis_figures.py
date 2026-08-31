@@ -117,9 +117,16 @@ def _arms(state):
 def fig3():
     s = list(csv.DictReader(open(os.path.join(OUT, "sweep_summary.csv"),
                                  encoding="utf-8")))
-    fig = plt.figure(figsize=(16, 15))
-    gs = fig.add_gridspec(3, 3, height_ratios=[1.0, 1.15, 0.62],
-                          hspace=0.22, wspace=0.30)
+    fig = plt.figure(figsize=(16, 19))
+    gs = fig.add_gridspec(4, 3, height_ratios=[0.95, 1.0, 1.15, 0.62],
+                          hspace=0.24, wspace=0.30)
+
+    # a: per-cluster zoom -- correctness-colored EDGES at a legible scale
+    axz = fig.add_subplot(gs[0, :])
+    _img(axz, os.path.join(DATA, EX, "results", "normal", "figures",
+                           "glm_topology_zoom_cluster04.png"),
+         "a  recovered wiring of one cluster -- edges colored by correctness "
+         "(TP green, FP red, FN dotted orange)")
 
     # a: cluster-sorted correctness matrix (right half of the predicted-
     # topology figure; the full-network edge drawing is illegible at ~10k edges)
@@ -128,13 +135,13 @@ def fig3():
                                   "glm_predicted_topology.png"))
     w, h = src.size
     mat = src.crop((int(0.50 * w), int(0.06 * h), w, h))
-    axa = fig.add_subplot(gs[0, 0])
+    axa = fig.add_subplot(gs[1, 2])
     axa.imshow(np.asarray(mat))
     axa.set_axis_off()
-    axa.set_title("a  predicted vs true adjacency (%s)" % EX,
+    axa.set_title("d  whole-network adjacency (%s)" % EX,
                   fontsize=10, loc="left")
 
-    axc = fig.add_subplot(gs[0, 1])
+    axc = fig.add_subplot(gs[1, 0])
     for row in s:
         if row.get("typed_precision") in ("", "nan", None):
             continue
@@ -150,7 +157,7 @@ def fig3():
     axc.legend(fontsize=8)
     axc.grid(alpha=0.3)
 
-    axd = fig.add_subplot(gs[0, 2])
+    axd = fig.add_subplot(gs[1, 1])
     for state, marker in (("normal", "o"), ("seizure", "^")):
         for sess, d in _arms(state).items():
             bx = 100.0 * d["dropped_bins"] / d["total_bins"]
@@ -173,15 +180,28 @@ def fig3():
     axd.grid(alpha=0.3)
     axd.legend(fontsize=7, loc="lower right")
 
-    axb = fig.add_subplot(gs[1, :])
+    axb = fig.add_subplot(gs[2, :])
     _img(axb, os.path.join(OUT, "scaling_by_group.png"),
-         "d  performance vs recording duration (color = burstiness)")
+         "e  performance vs recording duration (color = burstiness)")
 
-    axe = fig.add_subplot(gs[2, :])
+    axe = fig.add_subplot(gs[3, :])
     _img(axe, os.path.join(OUT, "weight_vs_detection.png"),
-         "e  detection probability vs synaptic weight (per E/I class)")
+         "f  detection probability vs synaptic weight (per E/I class)")
 
     p = os.path.join(OUT, "thesis_fig3.png")
+    fig.savefig(p, dpi=200, facecolor="white", bbox_inches="tight")
+    plt.close(fig)
+    print(p)
+
+
+def figS1():
+    fovN = os.path.join(OUT, "fov_rate_maps", "%s_normal_participation.png" % EX)
+    fovS = os.path.join(OUT, "fov_rate_maps", "%s_seizure_participation.png" % EX)
+    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
+    _img(axes[0], fovN, "a  burst-participation map, normal")
+    _img(axes[1], fovS, "b  burst-participation map, seizure")
+    fig.tight_layout()
+    p = os.path.join(OUT, "thesis_figS1.png")
     fig.savefig(p, dpi=200, facecolor="white", bbox_inches="tight")
     plt.close(fig)
     print(p)
@@ -191,3 +211,4 @@ if __name__ == "__main__":
     fig1()
     fig2()
     fig3()
+    figS1()
