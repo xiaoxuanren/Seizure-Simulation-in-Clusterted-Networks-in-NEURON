@@ -1,0 +1,32 @@
+# HTCondor submit file for the duration-grid analysis (chtc/analysis_one.py).
+# One job = one (session, n_recordings) GLM fit on spike-only inputs.
+# CPU-only, no NEURON. Outputs are single small JSONs via file transfer.
+#
+#   python3 chtc/make_analysis_manifest.py     # LOCALLY: jobs.txt + tarballs
+#   scp the kit up, then on the access point:
+#   SWEEP=analysis bash chtc/submit_all.sh YOUR_NETID
+
+container_image = file:///staging/YOUR_NETID/neuron-sim.sif
+universe = container
+
+executable = analysis_job.sh
+arguments = $(session) $(nrec)
+
+transfer_input_files = repo_analysis.tar.gz, spikes/spikes_$(session).tar.gz
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_output_files = durgrid_$(session)_n$INT(nrec,%03d).json
+
+log    = logs/analysis_$(Cluster).log
+output = logs/analysis_$(session)_n$(nrec).out
+error  = logs/analysis_$(session)_n$(nrec).err
+
+request_cpus   = 2
+request_memory = 8GB
+request_disk   = 2GB
+
+# n=200 fits: 9 ridge solves on a ~6000x6000 Gram, well under an hour
+max_retries = 3
+requirements = (Target.HasCHTCStaging == true)
+
+queue session,nrec from analysis_jobs.txt
