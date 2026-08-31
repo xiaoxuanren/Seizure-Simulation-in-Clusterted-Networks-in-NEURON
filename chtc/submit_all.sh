@@ -22,8 +22,12 @@ SESSIONS=("$@")                 # optional session-name filter
 STAGING="/staging/${NETID}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-SWEEP="${SWEEP:-normal}"        # seizure = companion sweep, ladder = mechanism ladders
-if [ "${SWEEP}" = "ladder" ]; then
+SWEEP="${SWEEP:-normal}"        # seizure = companion sweep, ladder = mechanism ladders,
+                                # analysis = spike-only duration grid
+if [ "${SWEEP}" = "analysis" ]; then
+    SUB_SRC="${HERE}/analysis.sub"
+    SUB_LOCAL="${HERE}/analysis.local.sub"
+elif [ "${SWEEP}" = "ladder" ]; then
     CFG="${HERE}/ladder_mechanisms.json"
     SUB_SRC="${HERE}/ladder.sub"
     SUB_LOCAL="${HERE}/ladder.local.sub"
@@ -73,7 +77,15 @@ fi
 mkdir -p "${STAGING}/neuron_sweeps" "${HERE}/logs"
 
 echo "== writing jobs.txt + repo.tar.gz"
-if [ "${SWEEP}" = "ladder" ]; then
+if [ "${SWEEP}" = "analysis" ]; then
+    # manifest + spike tarballs are built LOCALLY (the data lives there) and
+    # uploaded; here just check they arrived
+    for f in analysis_jobs.txt repo_analysis.tar.gz; do
+        [ -f "${HERE}/${f}" ] || { echo "ERROR: missing ${HERE}/${f} -- build with make_analysis_manifest.py locally and scp up"; exit 1; }
+    done
+    N_TARS=$(ls "${HERE}/spikes/"spikes_*.tar.gz 2>/dev/null | wc -l)
+    echo "   analysis kit present ($(wc -l < "${HERE}/analysis_jobs.txt") jobs, ${N_TARS} spike tarballs)"
+elif [ "${SWEEP}" = "ladder" ]; then
     if [ "${#SESSIONS[@]}" -gt 0 ]; then
         ( cd "${HERE}/.." && python3 chtc/make_ladder_manifest.py --sessions "${SESSIONS[@]}" )
     else
