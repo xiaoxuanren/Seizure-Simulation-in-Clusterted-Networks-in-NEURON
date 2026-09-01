@@ -28,6 +28,7 @@ from session_paths import DATA, resolve, results_dir, list_sessions  # noqa: E40
 
 STATE = os.environ.get("DATASET_STATE", "normal")
 OUT = os.path.join(DATA, "sweep_summary")
+SUFFIX = "" if STATE == "normal" else "_" + STATE   # never clobber normal figs
 C50, C40 = "#1f5fd0", "#c0392b"
 
 
@@ -120,7 +121,7 @@ def figures(all_stats):
         ax.grid(alpha=0.3)
     axe.set_ylabel("detection probability (typed operating point)")
     fig.suptitle("%d networks; blue c50, red c40" % len(all_stats), fontsize=9)
-    fig.tight_layout(); fig.savefig(os.path.join(OUT, "weight_vs_detection.png"),
+    fig.tight_layout(); fig.savefig(os.path.join(OUT, "weight_vs_detection%s.png" % SUFFIX),
                                     dpi=140, facecolor="white"); plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(7.0, 4.8))
@@ -133,7 +134,7 @@ def figures(all_stats):
     ax.set_xlabel("bursts per recording"); ax.set_ylabel("true-vs-predicted degree correlation")
     ax.set_title("Hub structure survives inference except in heavy burst regimes")
     ax.grid(alpha=0.3); ax.legend()
-    fig.tight_layout(); fig.savefig(os.path.join(OUT, "degree_recovery.png"),
+    fig.tight_layout(); fig.savefig(os.path.join(OUT, "degree_recovery%s.png" % SUFFIX),
                                     dpi=140, facecolor="white"); plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(7.0, 4.8))
@@ -148,7 +149,7 @@ def figures(all_stats):
     ax.set_ylabel("mean shared common input: FP pairs / TP pairs")
     ax.set_title("False positives are common-input pairs (ratio > 1 = FPs share more parents)")
     ax.grid(alpha=0.3)
-    fig.tight_layout(); fig.savefig(os.path.join(OUT, "fp_anatomy.png"),
+    fig.tight_layout(); fig.savefig(os.path.join(OUT, "fp_anatomy%s.png" % SUFFIX),
                                     dpi=140, facecolor="white"); plt.close(fig)
 
 
