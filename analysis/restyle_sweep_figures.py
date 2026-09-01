@@ -176,8 +176,12 @@ def fig_fp_anatomy():
 
 
 def fig_oracle():
-    """Achieved (typed protocol, all edges) vs oracle ceiling; the ceiling is
-    computed on the EXCITATORY layer -- the axes say so explicitly."""
+    """Achieved vs oracle F1, scored like against like on the all-|W| layer
+    (the layer the deployed operating point thresholds). Comparing the typed
+    achieved F1 to the excitatory-layer oracle mixes two edge sets and
+    overstates the thresholding cost; the CSV keeps every layer's numbers so
+    both the 0.033 (all-|W|) and 0.024 (excitatory) gaps are on the record.
+    durgrid has no typed oracle, so typed gets no gap here."""
     grid = {}
     for p in sorted(glob.glob(os.path.join(OUT, "durgrid", "durgrid_*.json"))):
         d = json.load(open(p, encoding="utf-8"))
@@ -187,17 +191,26 @@ def fig_oracle():
     rows = []
     for s, pts in sorted(grid.items()):
         d = pts[max(pts)]
+
+        def at070(layer):
+            return [r for r in d["layers"][layer]["targets"]
+                    if abs(r["target"] - 0.7) < 1e-9][0]["f1"]
+
         orc_exc = d["layers"]["exc"]["oracle"]["best_f1"]
         orc_all = d["layers"]["all_absW"]["oracle"]["best_f1"]
-        ach = d["typed_at_070"]["f1"]
-        ax.plot(orc_exc, ach, "o" if "_c50_" in s else "s", ms=4.5,
+        ach_all = at070("all_absW")
+        ach_exc = at070("exc")
+        ax.plot(orc_all, ach_all, "o" if "_c50_" in s else "s", ms=4.5,
                 color=col(s), alpha=0.85)
         rows.append(dict(session=s, group="c50" if "_c50_" in s else "c40",
                          n_recordings=max(pts),
-                         oracle_best_f1_exc=round(orc_exc, 4),
                          oracle_best_f1_all_absW=round(orc_all, 4),
-                         achieved_f1_typed=round(ach, 4),
-                         gap_vs_exc_oracle=round(orc_exc - ach, 4)))
+                         achieved_f1_all_absW=round(ach_all, 4),
+                         gap_all_absW=round(orc_all - ach_all, 4),
+                         oracle_best_f1_exc=round(orc_exc, 4),
+                         achieved_f1_exc=round(ach_exc, 4),
+                         gap_exc=round(orc_exc - ach_exc, 4),
+                         achieved_f1_typed=round(d["typed_at_070"]["f1"], 4)))
     lim = ax.get_xlim() + ax.get_ylim()
     lo, hi = min(lim), max(lim)
     ax.plot([lo, hi], [lo, hi], "--", color="0.6", lw=0.7)
@@ -205,20 +218,20 @@ def fig_oracle():
     ax.set_ylim(lo, hi)
     ax.plot([], [], "o", ms=4.5, color=st.C50, label="c50")
     ax.plot([], [], "s", ms=4.5, color=st.C40, label="c40")
-    ax.set_xlabel("oracle best F1 (excitatory layer,\nground-truth threshold)")
-    ax.set_ylabel("achieved F1 (typed protocol, all edges,\n"
-                  "label-free FDR 0.70)")
+    ax.set_xlabel("oracle best F1 (all-|W| layer,\nground-truth threshold)")
+    ax.set_ylabel("achieved F1 (all-|W| layer,\nlabel-free FDR 0.70)")
     ax.legend(loc="upper left")
     p = os.path.join(OUT, "durgrid_all_oracle.png")
     fig.savefig(p, dpi=st.DPI, facecolor="white")
     plt.close(fig)
     print(p)
     write_csv("durgrid_all_oracle.csv",
-              ["session", "group", "n_recordings", "oracle_best_f1_exc",
-               "oracle_best_f1_all_absW", "achieved_f1_typed",
-               "gap_vs_exc_oracle"], rows)
-    gaps = [r["gap_vs_exc_oracle"] for r in rows]
-    print("mean achieved-vs-EXC-oracle gap: %.3f F1" % np.mean(gaps))
+              ["session", "group", "n_recordings", "oracle_best_f1_all_absW",
+               "achieved_f1_all_absW", "gap_all_absW", "oracle_best_f1_exc",
+               "achieved_f1_exc", "gap_exc", "achieved_f1_typed"], rows)
+    print("mean like-for-like gap: all-|W| %.3f | exc %.3f"
+          % (np.mean([r["gap_all_absW"] for r in rows]),
+             np.mean([r["gap_exc"] for r in rows])))
 
 
 if __name__ == "__main__":
