@@ -260,7 +260,9 @@ def draw_b(ax, b):
 
 def draw_c(ax, b):
     th = b["theta"]
-    ax.plot(th, b["est_fdr_curve"], "-", color="#c0392b",
+    # the count-ratio estimator exceeds 1 where the null has more mass above
+    # theta than the data; clip for display, as q-values conventionally are
+    ax.plot(th, np.minimum(b["est_fdr_curve"], 1.0), "-", color="#c0392b",
             lw=1.0, label="estimated (jitter null)")
     ax.plot(th, b["realized_fdr_curve"], "-", color="#404040",
             lw=1.0, label="true (ground truth)")
