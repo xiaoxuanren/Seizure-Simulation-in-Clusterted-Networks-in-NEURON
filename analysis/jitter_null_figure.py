@@ -239,21 +239,28 @@ def draw_a(fig, sub, b):
     return [ax1, ax2, ax3]
 
 
-def draw_b(ax, b):
+def draw_b(ax, b, compact=False):
     obs, null = b["obs"], b["null"]
     thr = float(b["threshold"])
     hi = max(obs.max(), null.max())
     bins = np.linspace(0.0, float(hi), 120)
+    lab_null = ("jitter null" if compact
+                else "jitter null (mean of %d)" % null.shape[0])
     ax.hist(null.ravel(), bins=bins, weights=np.full(null.size, 1.0 / null.shape[0]),
-            color="#c9a0a0", label="jitter null (mean of %d)" % null.shape[0])
+            color="#c9a0a0", label=lab_null)
     ax.hist(obs, bins=bins, histtype="step", color="#202020", lw=0.9,
             label="real fit")
     ax.axvline(thr, ls="--", color="#1f5fd0", lw=0.9,
-               label=u"\u03b8 = %.4f (FDR 0.70)" % thr)
+               label=(u"\u03b8*" if compact
+                      else u"\u03b8 = %.4f (FDR 0.70)" % thr))
     ax.set_yscale("log")
     ax.set_xlabel(u"edge score  |W|")
     ax.set_ylabel("pair count")
-    ax.legend(frameon=False, loc="upper right")
+    if compact:
+        ax.legend(frameon=False, loc="upper right", fontsize=5.6,
+                  handlelength=1.1, labelspacing=0.25, borderaxespad=0.1)
+    else:
+        ax.legend(frameon=False, loc="upper right")
     despine(ax)
     panel_letter(ax, "b")
 
@@ -327,13 +334,140 @@ def render(bundle_path, session):
     print(qa)
 
 
+def _sessions():
+    return sorted(os.path.basename(os.path.dirname(p)) for p in glob.glob(
+        os.path.join(DATA, "sweep_c*_seed*", "results")))
+
+
+def _bundle(session, state="normal"):
+    return os.path.join(results_dir(session, state, "glm"),
+                        "jitter_null_bundle.npz")
+
+
+def draw_d(ax):
+    """Calibration across the study: realized vs nominal FDR, all 20 nets."""
+    import thesis_style as ts
+    for s in _sessions():
+        p = os.path.join(results_dir(s, "normal", "glm"),
+                         "fdr_calibration.json")
+        if not os.path.exists(p):
+            continue
+        rows = json.load(open(p, encoding="utf-8"))["targets"]
+        ax.plot([r["target"] for r in rows],
+                [r["realized_fdr"] for r in rows], "-o", ms=1.8, lw=0.8,
+                color=ts.C50 if "_c50_" in s else ts.C40, alpha=0.65)
+    ax.plot([0, 1], [0, 1], "--", color="0.5", lw=0.8)
+    ax.plot([], [], "-", color=st_c50(), label="50-cluster")
+    ax.plot([], [], "-", color=st_c40(), label="40-cluster")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("nominal FDR target")
+    ax.set_ylabel("realized FDR")
+    ax.legend(frameon=False, loc="upper left", fontsize=6.5)
+    ax.grid(lw=0.4, color="0.9")
+    ax.set_axisbelow(True)
+    despine(ax)
+    panel_letter(ax, "d")
+
+
+def st_c50():
+    import thesis_style as ts
+    return ts.C50
+
+
+def st_c40():
+    import thesis_style as ts
+    return ts.C40
+
+
+def composite(rep="sweep_c50_seed09"):
+    """thesis_fig2_v3.png: (a)-(c) on the representative network, (d) sweep."""
+    b = dict(np.load(_bundle(rep), allow_pickle=True))
+    fig = plt.figure(figsize=(FIGW, 2.45))
+    gs = gridspec.GridSpec(1, 4, width_ratios=[1.18, 1.0, 1.0, 1.0],
+                           wspace=0.50, left=0.045, right=0.99,
+                           top=0.89, bottom=0.18)
+    draw_a(fig, gs[0], b)
+    draw_b(fig.add_subplot(gs[1]), b, compact=True)
+    draw_c(fig.add_subplot(gs[2]), b)
+    draw_d(fig.add_subplot(gs[3]))
+    p = os.path.join(DATA, "sweep_summary", "thesis_fig2_v3.png")
+    fig.savefig(p, dpi=DPI, facecolor="white")
+    plt.close(fig)
+    print(p)
+
+
+def across_networks():
+    """Panel-(b) tail comparison for all 20 networks: survival fraction of
+    pair scores vs theta normalized by each network's selected threshold."""
+    fig, ax = plt.subplots(figsize=(4.4, 3.4))
+    fig.subplots_adjust(left=0.15, right=0.96, top=0.94, bottom=0.15)
+    for s in _sessions():
+        b = np.load(_bundle(s), allow_pickle=True)
+        obs, null = b["obs"], b["null"]
+        thr = float(b["threshold"])
+        xs = np.logspace(-1.3, 1.0, 140) * thr
+        obs_s = np.sort(obs)
+        null_s = np.sort(null.ravel())
+        fo = (obs.size - np.searchsorted(obs_s, xs)) / obs.size
+        fn_ = (null.size - np.searchsorted(null_s, xs)) / null.size
+        col = st_c50() if "_c50_" in s else st_c40()
+        ax.plot(xs / thr, np.maximum(fo, 1e-8), "-", color=col, lw=0.8,
+                alpha=0.65)
+        ax.plot(xs / thr, np.maximum(fn_, 1e-8), "-", color="0.65", lw=0.6,
+                alpha=0.5)
+    ax.axvline(1.0, ls="--", color="0.4", lw=0.8)
+    ax.plot([], [], "-", color=st_c50(), label="real fit, 50-cluster")
+    ax.plot([], [], "-", color=st_c40(), label="real fit, 40-cluster")
+    ax.plot([], [], "-", color="0.65", label="jitter null (all networks)")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_ylim(3e-7, 1.2)
+    ax.set_xlabel(u"θ / θ*  (selected threshold)")
+    ax.set_ylabel(u"fraction of pairs with score > θ")
+    ax.legend(frameon=False, loc="lower left", fontsize=6.5)
+    ax.grid(lw=0.4, color="0.9")
+    ax.set_axisbelow(True)
+    despine(ax)
+    p = os.path.join(DATA, "sweep_summary", "jitter_null_across_networks.png")
+    fig.savefig(p, dpi=DPI, facecolor="white")
+    plt.close(fig)
+    print(p)
+
+
+def table():
+    print("\n%-18s %10s %8s %10s %8s %8s %8s"
+          % ("session", "threshold", "edges", "null_exp", "est", "true",
+             "ratio"))
+    ratios = []
+    for s in _sessions():
+        b = np.load(_bundle(s), allow_pickle=True)
+        ratio = float(b["surr_mean_above"]) / max(int(b["fp"]), 1)
+        ratios.append(ratio)
+        print("%-18s %10.6f %8d %10.1f %8.4f %8.4f %7.1fx"
+              % (s, float(b["threshold"]), int(b["n_pred"]),
+                 float(b["surr_mean_above"]), float(b["est_fdr"]),
+                 float(b["realized_fdr"]), ratio))
+    ratios = np.array(ratios)
+    print("conservatism ratio: mean %.1fx  median %.1fx  range %.1f-%.1fx"
+          % (ratios.mean(), np.median(ratios), ratios.min(), ratios.max()))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--session", default="sweep_c50_seed09")
     ap.add_argument("--state", default="normal")
     ap.add_argument("--replot", action="store_true",
                     help="redraw from the cached bundle without refitting")
+    ap.add_argument("--composite", action="store_true",
+                    help="build thesis_fig2_v3 + across-networks overlay + "
+                         "per-network table from the existing bundles")
     a = ap.parse_args()
+    if a.composite:
+        composite(a.session)
+        across_networks()
+        table()
+        return
     bundle = os.path.join(results_dir(a.session, a.state, "glm"),
                           "jitter_null_bundle.npz")
     if not (a.replot and os.path.exists(bundle)):
