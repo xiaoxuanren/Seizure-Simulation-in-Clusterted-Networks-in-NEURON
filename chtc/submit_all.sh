@@ -5,6 +5,7 @@
 #     bash chtc/submit_all.sh mynetid                          # full sweep, explicit NetID
 #     bash chtc/submit_all.sh mynetid sweep_c50_seed01 ...     # only these sessions
 #     SWEEP=seizure bash chtc/submit_all.sh mynetid ...        # the SEIZURE companion sweep
+#     SWEEP=baselines bash chtc/submit_all.sh mynetid          # the baseline-methods sweep
 #
 # Session filtering exists for staged waves: the DEFAULT /staging quota
 # (100 GB / 1,000 files) fits at most TWO full-voltage sessions at a time
@@ -24,7 +25,11 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 SWEEP="${SWEEP:-normal}"        # seizure = companion sweep, ladder = mechanism ladders,
                                 # analysis = spike-only duration grid
-if [ "${SWEEP}" = "analysis" ]; then
+if [ "${SWEEP}" = "baselines" ]; then
+    CFG="${HERE}/baselines_jobs.txt"
+    SUB_SRC="${HERE}/baselines.sub"
+    SUB_LOCAL="${HERE}/baselines.local.sub"
+elif [ "${SWEEP}" = "analysis" ]; then
     CFG="${HERE}/analysis_jobs.txt"
     SUB_SRC="${HERE}/analysis.sub"
     SUB_LOCAL="${HERE}/analysis.local.sub"
@@ -78,7 +83,13 @@ fi
 mkdir -p "${STAGING}/neuron_sweeps" "${HERE}/logs"
 
 echo "== writing jobs.txt + repo.tar.gz"
-if [ "${SWEEP}" = "analysis" ]; then
+if [ "${SWEEP}" = "baselines" ]; then
+    for f in baselines_jobs.txt repo_baselines.tar.gz; do
+        [ -f "${HERE}/${f}" ] || { echo "ERROR: missing ${HERE}/${f} -- build with make_baselines_manifest.py locally and scp up"; exit 1; }
+    done
+    N_TARS=$(ls "${HERE}/spikes/"spikes_*_*.tar.gz 2>/dev/null | wc -l)
+    echo "   baselines kit present ($(wc -l < "${HERE}/baselines_jobs.txt") jobs, ${N_TARS} spike tarballs)"
+elif [ "${SWEEP}" = "analysis" ]; then
     # manifest + spike tarballs are built LOCALLY (the data lives there) and
     # uploaded; here just check they arrived
     for f in analysis_jobs.txt repo_analysis.tar.gz; do
