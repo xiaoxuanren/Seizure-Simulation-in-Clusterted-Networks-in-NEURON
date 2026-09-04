@@ -79,6 +79,15 @@ def main():
         del E
     p = os.path.join(cm.summary_dir(), "delay_gate_%s_%s_n%03d.json"
                      % (a.session, a.state, a.n_recordings))
+    if os.path.exists(p):                       # merge: runs for different methods accumulate
+        try:
+            with open(p, encoding="utf-8") as fh:
+                prev = json.load(fh)
+            merged = dict(prev.get("methods", {}))
+            merged.update(out["methods"])
+            out["methods"] = merged
+        except (OSError, ValueError):
+            pass
     with open(p, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=1)
     print("-> %s" % p)
