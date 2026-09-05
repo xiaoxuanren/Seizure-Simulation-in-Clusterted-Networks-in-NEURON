@@ -182,3 +182,12 @@ versions of the scripts.
 | `spike_transmission_probability.png` | `spike_transmission.py` | pre→post spike-transmission probability, in- vs out-of-burst |
 | `voltage_burst_vs_interburst.png` | `voltage_traces.py` | Vm during vs outside a network burst |
 | `voltage_connected_pairs.png` | `voltage_traces.py` | connected-pair traces + spike-triggered EPSP/IPSP |
+
+## Baseline comparison (`analysis/baselines/`)
+
+The standard connectivity-inference baselines of Kobayashi & Shinomoto (2025):
+zero-lag / lagged Pearson, classical CCG, jitter-corrected CCG, TSPE, FNCCH,
+GLMCC, transfer entropy (1/2/5/10 ms), deconvolved spike-transmission gain,
+run on every sweep dataset in both states and both arms and scored
+like-for-like against the shipped GLM. See `analysis/baselines/README.md` and
+`notebooks/NEURON data parallel/sweep_summary/baselines/RESULTS.md`.

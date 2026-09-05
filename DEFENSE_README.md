@@ -55,6 +55,9 @@ impaired K+ clearance yields depolarization block, not ictal lengthening.
           glm/*.json        edge metrics, FDR calibration, burst-exclusion
                             arms, split-half, scaling (weight matrices excluded)
       sweep_summary/        cross-network everything:
+        baselines/          standard-method baselines vs the shipped GLM on all 40
+                            datasets (RESULTS.md, metrics.csv, figures/, maps/;
+                            code in analysis/baselines/, see its README.md)
         thesis_section.docx     thesis draft: methods, results, Figs 1-3 + S1-S3
         thesis_fig{1,2,3}.png, thesis_figS1.png  composite thesis figures
         durgrid/            260 JSONs: the CHTC duration-grid (20 nets x 13 durations)
