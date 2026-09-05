@@ -443,6 +443,8 @@ def main():
     L.append("- **Failed to run:** %s" % ("; ".join(fails) if fails else "nothing (all (dataset, method, arm) jobs completed)."))
     if notes.get("projected"):
         L.append("- **Projected before launch:** %s" % notes["projected"])
+    if notes.get("spent"):
+        L.append("- **Spent:** %s" % notes["spent"])
     L.append("")
 
     # ---- limitations -----------------------------------------------------
