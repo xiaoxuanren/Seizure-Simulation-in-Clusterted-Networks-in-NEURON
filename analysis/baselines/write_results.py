@@ -217,6 +217,69 @@ def main():
                  % os.path.basename(gates[-1]))
         L.append("")
 
+    # ---- key findings (computed) -----------------------------------------
+    def mean_of(state, arm, method, col):
+        v = np.array([r[col] for r in rows if r["state"] == state and r["arm"] == arm
+                      and r["method"] == method], float)
+        v = v[np.isfinite(v)]
+        return float(v.mean()) if len(v) else float("nan")
+
+    PROBES = {"stg_roi15", "glmcc_d14"}
+    FINE = ["ccg_classical", "tspe", "fncch", "te_1ms", "stg_roi15"]      # 1 ms methods
+    COARSE = ["ccg_jitter", "pearson_lag", "te_5ms", "te_10ms"]           # 5-10 ms methods
+    L.append("## Key findings (computed from the tables below)")
+    L.append("")
+    for st in states:
+        if not any(r["state"] == st and r["arm"] == "full" for r in rows):
+            continue
+        base = [m for m in methods if m != "glm_ridge" and m not in PROBES]
+        probes = [m for m in methods if m in PROBES]
+        g_exc, g_unt = mean_of(st, "full", "glm_ridge", "exc_ap"), mean_of(st, "full", "glm_ridge", "untyped_ap")
+        g_p, g_r = mean_of(st, "full", "glm_ridge", "labelfree_precision_untyped"), mean_of(st, "full", "glm_ridge", "labelfree_recall_untyped")
+        ranked = sorted(base, key=lambda m: -mean_of(st, "full", m, "exc_ap"))
+        b1 = ranked[0] if ranked else None
+        L.append("**%s state, full recordings (mean over networks).**" % st)
+        if b1:
+            L.append("- Excitatory AP: ridge GLM %.3f vs best published baseline %s %.3f "
+                     "(then %s); untyped AP %.3f vs %.3f." % (
+                         g_exc, lab(b1), mean_of(st, "full", b1, "exc_ap"),
+                         ", ".join("%s %.3f" % (lab(m), mean_of(st, "full", m, "exc_ap")) for m in ranked[1:4]),
+                         g_unt, mean_of(st, "full", b1, "untyped_ap")))
+        for m in probes:
+            L.append("- Mismatch probe %s: exc AP %.3f, untyped AP %.3f (vs the faithful %s %.3f / %.3f)." % (
+                lab(m), mean_of(st, "full", m, "exc_ap"), mean_of(st, "full", m, "untyped_ap"),
+                lab(m.split("_")[0]), mean_of(st, "full", m.split("_")[0], "exc_ap"),
+                mean_of(st, "full", m.split("_")[0], "untyped_ap")))
+        lf = [(m, mean_of(st, "full", m, "labelfree_precision_untyped"), mean_of(st, "full", m, "labelfree_recall_untyped"),
+               mean_of(st, "full", m, "labelfree_realized_fdr_untyped"))
+              for m in methods if m != "glm_ridge" and np.isfinite(mean_of(st, "full", m, "labelfree_precision_untyped"))]
+        if lf:
+            L.append("- Label-free operating points (each method's own rule, untyped, all-edges denominator): "
+                     "ridge GLM P %.3f / R %.3f; %s." % (
+                         g_p, g_r, "; ".join("%s P %.3f / R %.3f" % (lab(m), p_, r_) for m, p_, r_, _ in lf)))
+        j_fdr, g_fdr = mean_of(st, "full", "ccg_jitter", "labelfree_realized_fdr_untyped"), mean_of(st, "full", "glm_ridge", "labelfree_realized_fdr_untyped")
+        if np.isfinite(j_fdr):
+            L.append("- Same statistic, same null: with the identical +/-25 ms x 8-surrogate jitter null at nominal "
+                     "FDR 0.70, the raw-CCG row realizes FDR %.3f (AP %.3f) while the whitened GLM row realizes "
+                     "%.3f (AP %.3f). The joint fit is what makes the null usable, not the null itself." % (
+                         j_fdr, mean_of(st, "full", "ccg_jitter", "untyped_ap"), g_fdr, g_unt))
+        # burst exclusion by timescale
+        def dap(m):
+            a, b = mean_of(st, "full", m, "untyped_ap"), mean_of(st, "burst_excluded", m, "untyped_ap")
+            return b - a if np.isfinite(a) and np.isfinite(b) else float("nan")
+        fine = [dap(m) for m in FINE if np.isfinite(dap(m))]
+        coarse = [dap(m) for m in COARSE if np.isfinite(dap(m))]
+        if fine and coarse:
+            gp2 = mean_of(st, "burst_excluded", "glm_ridge", "labelfree_precision_untyped")
+            L.append("- Burst exclusion (untyped AP, burst-excluded minus full): 1 ms-window methods %+.3f on average "
+                     "(%s), 5-10 ms-window methods %+.3f (%s); ridge GLM %+.3f in AP but label-free precision "
+                     "%.3f -> %.3f. Removing burst windows removes the shared drive that swamps coarse-timescale "
+                     "statistics, and removes the coincidence counts that the fine-timescale statistics need." % (
+                         float(np.mean(fine)), ", ".join("%s %+.2f" % (lab(m), dap(m)) for m in FINE if np.isfinite(dap(m))),
+                         float(np.mean(coarse)), ", ".join("%s %+.2f" % (lab(m), dap(m)) for m in COARSE if np.isfinite(dap(m))),
+                         dap("glm_ridge"), g_p, gp2))
+        L.append("")
+
     # ---- tables ----------------------------------------------------------
     L.append("## Results")
     L.append("")
