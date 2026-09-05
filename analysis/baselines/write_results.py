@@ -280,6 +280,62 @@ def main():
                 cells.append("%+.2f" % v if v is not None and np.isfinite(v) else "--")
             L.append("| %s | %s |" % (lab(m), " | ".join(cells)))
 
+    # ---- GLMCC diagnostics ----------------------------------------------
+    long_p = os.path.join(out, "metrics.csv")
+    if os.path.exists(long_p):
+        diag = {}
+        with open(long_p, encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                if (r["method"].startswith("glmcc") and int(r["n_recordings"]) == a.n_recordings
+                        and r["operating_point"] == "label_free_untyped"
+                        and r["metric"] in ("frac_J_at_lower_bound", "frac_J_at_upper_bound",
+                                            "J_thr_median", "J_thr_min", "newton_iters_mean")):
+                    diag.setdefault((r["method"], r["state"], r["arm"]), {}).setdefault(
+                        r["metric"], []).append(float(r["value"]))
+        if diag:
+            L.append("")
+            L.append("### GLMCC fit diagnostics")
+            L.append("")
+            L.append("The published rule declares a connection when |J| > J_thr = c/sqrt(T tau "
+                     "lambda_pre lambda_post) with c = 5.16 (alpha 0.001) and J bounded to [-3, 5]. "
+                     "At this network's firing rates J_thr is often above the bound, so the test cannot "
+                     "fire; pairs with no coincidences in the kernel window pin at the lower bound J = -3.")
+            L.append("")
+            L.append("| method | state | arm | median J_thr | min J_thr | frac J at -3 | frac J at +5 | Newton iters |")
+            L.append("|---|---|---|---|---|---|---|---|")
+            for (m, st, arm), d in sorted(diag.items()):
+                g = lambda k: "%.3g" % np.mean(d[k]) if k in d else "--"
+                L.append("| %s | %s | %s | %s | %s | %s | %s | %s |" % (
+                    lab(m), st, arm, g("J_thr_median"), g("J_thr_min"), g("frac_J_at_lower_bound"),
+                    g("frac_J_at_upper_bound"), g("newton_iters_mean")))
+
+    # ---- pilot appendix --------------------------------------------------
+    pilot_p = os.path.join(out, "metrics_wide_pilot_n050.csv")
+    if os.path.exists(pilot_p):
+        with open(pilot_p, encoding="utf-8") as fh:
+            prow = list(csv.DictReader(fh))
+        L.append("")
+        L.append("### Staging pilot (n = 50 recordings; quietest and burstiest network)")
+        L.append("")
+        L.append("Run before the sweep to check the ordering. Untyped AP, full arm -> burst-excluded arm.")
+        L.append("")
+        psess = sorted({r["session"] for r in prow if r["session"] in ("sweep_c40_seed12", "sweep_c40_seed14")})
+        pmeth = order({r["method"] for r in prow})
+        hdr = ["%s/%s" % (s.replace("sweep_", ""), st) for s in psess for st in ("normal", "seizure")]
+        L.append("| method | " + " | ".join(hdr) + " |")
+        L.append("|---|" + "|".join("---" for _ in hdr) + "|")
+        for m in pmeth:
+            cells = []
+            for s in psess:
+                for st in ("normal", "seizure"):
+                    fu = [r for r in prow if r["session"] == s and r["state"] == st and r["method"] == m and r["arm"] == "full"]
+                    ex = [r for r in prow if r["session"] == s and r["state"] == st and r["method"] == m and r["arm"] == "burst_excluded"]
+                    try:
+                        cells.append("%.2f -> %.2f" % (float(fu[0]["untyped_ap"]), float(ex[0]["untyped_ap"])))
+                    except (IndexError, ValueError):
+                        cells.append("--")
+            L.append("| %s | %s |" % (lab(m), " | ".join(cells)))
+
     # ---- figures ---------------------------------------------------------
     L.append("")
     L.append("## Figures")

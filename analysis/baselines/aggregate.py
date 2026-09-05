@@ -81,9 +81,13 @@ def load_all(n_tag):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n-recordings", type=int, default=200)
+    ap.add_argument("--suffix", default="",
+                    help="appended to every output name (e.g. _pilot_n050 keeps a pilot "
+                         "aggregate next to the main one)")
     a = ap.parse_args()
     n_tag = "n%03d" % a.n_recordings
     out = cm.summary_dir()
+    sfx = a.suffix
 
     long_rows, wide, structure, compute, params = [], {}, {}, {}, {}
     n_files = 0
@@ -118,18 +122,19 @@ def main():
 
     cols = ["session", "group", "state", "n_recordings", "method", "module", "tier", "directed",
             "arm", "readout", "operating_point", "denominator", "metric", "value"]
-    with open(os.path.join(out, "metrics.csv"), "w", newline="", encoding="utf-8") as fh:
+    with open(os.path.join(out, "metrics%s.csv" % sfx), "w", newline="", encoding="utf-8") as fh:
         wr = csv.DictWriter(fh, fieldnames=cols)
         wr.writeheader()
         wr.writerows(long_rows)
     wcols = ["session", "group", "state", "n_recordings", "method", "module", "tier", "directed", "arm"] + \
             [h[0] for h in HEADLINE] + ["dropped_frac_5ms", "n_burst_windows", "elapsed_s"]
-    with open(os.path.join(out, "metrics_wide.csv"), "w", newline="", encoding="utf-8") as fh:
+    with open(os.path.join(out, "metrics_wide%s.csv" % sfx), "w", newline="", encoding="utf-8") as fh:
         wr = csv.DictWriter(fh, fieldnames=wcols)
         wr.writeheader()
         for key in sorted(wide):
             wr.writerow(wide[key])
-    for name, obj in (("structure.json", structure), ("compute.json", compute), ("params.json", params)):
+    for name, obj in (("structure%s.json" % sfx, structure), ("compute%s.json" % sfx, compute),
+                      ("params%s.json" % sfx, params)):
         with open(os.path.join(out, name), "w", encoding="utf-8") as fh:
             json.dump(obj, fh, indent=1)
     print("%d result files -> %s (%d long rows, %d wide rows)"
