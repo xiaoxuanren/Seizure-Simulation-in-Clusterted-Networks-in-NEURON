@@ -1,0 +1,199 @@
+{
+ "ccg_classical": {
+  "bin_ms": 1.0,
+  "max_lag": 50,
+  "causal_lags": [
+   1,
+   15
+  ],
+  "flank_lags": [
+   30,
+   50
+  ],
+  "b_floor": 0.5,
+  "alpha": 0.001,
+  "typing_fraction": 0.25
+ },
+ "ccg_jitter": {
+  "bin_ms": 5.0,
+  "ksum": 4,
+  "max_lag": 6,
+  "jitter_ms": 25.0,
+  "n_surr": 8,
+  "seed": 1,
+  "sigma_floor": 0.5,
+  "target_fdr": 0.7,
+  "typing_fraction": 0.25
+ },
+ "fncch": {
+  "bin_ms": 1.0,
+  "window_ms": 25.0,
+  "k_exc": 2.0,
+  "k_inh": 1.0,
+  "typing_fraction": 0.25,
+  "chunk_rows": 128
+ },
+ "glm_ridge": {
+  "bin_ms": 5.0,
+  "max_lag": 6,
+  "l2": 2.0,
+  "ksum": 4,
+  "jitter_ms": 25.0,
+  "n_surr": 8,
+  "seed": 1,
+  "target_fdr": 0.7,
+  "typing_lags": 2,
+  "typing_fraction": 0.25
+ },
+ "glmcc": {
+  "bin_ms": 1.0,
+  "window_ms": 50,
+  "tau_ms": 4.0,
+  "delays_ms": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "gamma": 0.0005,
+  "c_alpha": 5.16,
+  "alpha": 0.001,
+  "j_bounds": [
+   -3.0,
+   5.0
+  ],
+  "j_init": 0.1,
+  "a_floor": 1e-06,
+  "max_iter": 50,
+  "tol": 0.0001,
+  "max_halvings": 12,
+  "newton_damping": 1e-12,
+  "chunk": 32768,
+  "pair_subsample": null,
+  "subsample_seed": 1,
+  "verbose": false
+ },
+ "glmcc_d14": {
+  "bin_ms": 1.0,
+  "window_ms": 50,
+  "tau_ms": 4.0,
+  "delays_ms": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14
+  ],
+  "gamma": 0.0005,
+  "c_alpha": 5.16,
+  "alpha": 0.001,
+  "j_bounds": [
+   -3.0,
+   5.0
+  ],
+  "j_init": 0.1,
+  "a_floor": 1e-06,
+  "max_iter": 50,
+  "tol": 0.0001,
+  "max_halvings": 12,
+  "newton_damping": 1e-12,
+  "chunk": 32768,
+  "pair_subsample": null,
+  "subsample_seed": 1,
+  "verbose": false
+ },
+ "pearson0": {
+  "bin_ms": 5.0
+ },
+ "pearson_lag": {
+  "bin_ms": 5.0,
+  "max_lag": 6
+ },
+ "stg": {
+  "bin_ms": 1.0,
+  "half_window_ms": 30.0,
+  "delta_ms": 5.0,
+  "roi_ms": [
+   0.0,
+   5.0
+  ],
+  "alpha": 0.001,
+  "fach_floor": 1e-06,
+  "pred_floor": "chance",
+  "chunk_rows": 64,
+  "typing_fraction": 0.25
+ },
+ "stg_roi15": {
+  "bin_ms": 1.0,
+  "half_window_ms": 30.0,
+  "delta_ms": 5.0,
+  "roi_ms": [
+   0.0,
+   15.0
+  ],
+  "alpha": 0.001,
+  "fach_floor": 1e-06,
+  "pred_floor": "chance",
+  "chunk_rows": 64,
+  "typing_fraction": 0.25
+ },
+ "te_10ms": {
+  "bin_ms": 10.0,
+  "max_delay_ms": 30.0,
+  "k": 1,
+  "l": 1,
+  "log_base": 2
+ },
+ "te_1ms": {
+  "bin_ms": 1.0,
+  "max_delay_ms": 30.0,
+  "k": 1,
+  "l": 1,
+  "log_base": 2
+ },
+ "te_2ms": {
+  "bin_ms": 2.0,
+  "max_delay_ms": 30.0,
+  "k": 1,
+  "l": 1,
+  "log_base": 2
+ },
+ "te_5ms": {
+  "bin_ms": 5.0,
+  "max_delay_ms": 30.0,
+  "k": 1,
+  "l": 1,
+  "log_base": 2
+ },
+ "tspe": {
+  "bin_ms": 1.0,
+  "max_delay": 25,
+  "surrounding": [
+   3,
+   4,
+   5,
+   6,
+   7,
+   8
+  ],
+  "observed": [
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "crossover": [
+   0
+  ]
+ }
+}
