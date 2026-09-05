@@ -436,6 +436,24 @@ def label_free(spikes, n_neurons, S, **params):
     inh = rank_typing(-np.asarray(S, np.float64).sum(1))
     info = dict(threshold=1.0, alpha=float(p["alpha"]), c_alpha=float(p["c_alpha"]),
                 n_pred=int(pred.sum()))
+    # fit diagnostics of the last score() call (same Session in the runner):
+    # how many couplings sit on the J bounds, mean Newton iterations, and the
+    # median J_thr in J units so the reader can see whether the published
+    # test can fire at all at these firing rates
+    if LAST_INFO:
+        n_c = max(2 * LAST_INFO.get("n_pairs", 0), 1)
+        info["frac_J_at_lower_bound"] = LAST_INFO.get("at_lower", 0) / n_c
+        info["frac_J_at_upper_bound"] = LAST_INFO.get("at_upper", 0) / n_c
+        info["newton_iters_mean"] = float(LAST_INFO.get("n_iter_mean", 0.0))
+        info["fit_s"] = float(LAST_INFO.get("fit_s", 0.0))
+    sd = spikes.at(p["bin_ms"])
+    T_s = sd.T * p["bin_ms"] * 1e-3
+    lam = sd.n_spikes / T_s
+    act = lam > 0
+    if act.sum() >= 2:
+        jthr = p["c_alpha"] / np.sqrt(T_s * p["tau_ms"] * 1e-3 * np.outer(lam[act], lam[act]))
+        info["J_thr_median"] = float(np.median(jthr[~np.eye(int(act.sum()), dtype=bool)]))
+        info["J_thr_min"] = float(jthr[~np.eye(int(act.sum()), dtype=bool)].min())
     typed_info = dict(info, n_inh_typed=int(inh.sum()))
     return dict(untyped=(pred, info), typed=(pred.copy(), typed_info), typing_inh=inh,
                 rule="GLMCC |J| > J_thr(alpha=%g)" % p["alpha"])
