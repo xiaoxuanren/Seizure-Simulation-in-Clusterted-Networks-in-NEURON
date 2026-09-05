@@ -39,16 +39,16 @@ Branch `baselines-comparison`. Every number below was produced by `analysis/base
 **normal state, full recordings (mean over networks).**
 - Excitatory AP: ridge GLM 0.941 vs best published baseline TSPE 0.795 (then classical CCG 0.724, FNCCH 0.721, TE 1 ms 0.479); untyped AP 0.873 vs 0.727.
 - Mismatch probe STG ROI 15 ms: exc AP 0.812, untyped AP 0.740 (vs the faithful STG (deconv.) 0.252 / 0.285).
-- Mismatch probe GLMCC d<=14 ms: exc AP 0.792, untyped AP 0.219 (vs the faithful GLMCC 0.361 / 0.149).
-- Label-free operating points (each method's own rule, untyped, all-edges denominator): ridge GLM P 0.794 / R 0.808; jittered CCG P 0.041 / R 0.963; GLMCC P 0.309 / R 0.079; STG (deconv.) P 0.423 / R 0.282; FNCCH P 0.202 / R 0.606; classical CCG P 0.121 / R 0.921; STG ROI 15 ms P 0.573 / R 0.745; GLMCC d<=14 ms P 0.155 / R 0.166.
+- Mismatch probe GLMCC d<=14 ms: exc AP 0.775, untyped AP 0.208 (vs the faithful GLMCC 0.361 / 0.149).
+- Label-free operating points (each method's own rule, untyped, all-edges denominator): ridge GLM P 0.794 / R 0.808; jittered CCG P 0.041 / R 0.963; GLMCC P 0.309 / R 0.079; STG (deconv.) P 0.423 / R 0.282; FNCCH P 0.202 / R 0.606; classical CCG P 0.121 / R 0.921; STG ROI 15 ms P 0.573 / R 0.745; GLMCC d<=14 ms P 0.188 / R 0.122.
 - Same statistic, same null: with the identical +/-25 ms x 8-surrogate jitter null at nominal FDR 0.70, the raw-CCG row realizes FDR 0.959 (AP 0.347) while the whitened GLM row realizes 0.206 (AP 0.873). The joint fit is what makes the null usable, not the null itself.
 - Burst exclusion (untyped AP, burst-excluded minus full): 1 ms-window methods -0.026 on average (classical CCG +0.01, TSPE -0.05, FNCCH -0.06, TE 1 ms +0.05, STG ROI 15 ms -0.08), 5-10 ms-window methods +0.141 (jittered CCG +0.22, lagged Pearson +0.08, TE 5 ms +0.12, TE 10 ms +0.13); ridge GLM -0.028 in AP but label-free precision 0.794 -> 0.906. Removing burst windows removes the shared drive that swamps coarse-timescale statistics, and removes the coincidence counts that the fine-timescale statistics need.
 
 **seizure state, full recordings (mean over networks).**
 - Excitatory AP: ridge GLM 0.847 vs best published baseline TSPE 0.795 (then FNCCH 0.785, classical CCG 0.729, TE 1 ms 0.577); untyped AP 0.841 vs 0.782.
 - Mismatch probe STG ROI 15 ms: exc AP 0.841, untyped AP 0.814 (vs the faithful STG (deconv.) 0.259 / 0.321).
-- Mismatch probe GLMCC d<=14 ms: exc AP 0.865, untyped AP 0.927 (vs the faithful GLMCC 0.352 / 0.472).
-- Label-free operating points (each method's own rule, untyped, all-edges denominator): ridge GLM P 0.311 / R 0.906; jittered CCG P 0.018 / R 0.996; GLMCC P 0.404 / R 0.489; STG (deconv.) P 0.181 / R 0.498; FNCCH P 0.151 / R 0.776; classical CCG P 0.021 / R 0.999; STG ROI 15 ms P 0.211 / R 0.991; GLMCC d<=14 ms P 0.550 / R 0.971.
+- Mismatch probe GLMCC d<=14 ms: exc AP 0.801, untyped AP 0.873 (vs the faithful GLMCC 0.352 / 0.472).
+- Label-free operating points (each method's own rule, untyped, all-edges denominator): ridge GLM P 0.311 / R 0.906; jittered CCG P 0.018 / R 0.996; GLMCC P 0.404 / R 0.489; STG (deconv.) P 0.181 / R 0.498; FNCCH P 0.151 / R 0.776; classical CCG P 0.021 / R 0.999; STG ROI 15 ms P 0.211 / R 0.991; GLMCC d<=14 ms P 0.445 / R 0.961.
 - Same statistic, same null: with the identical +/-25 ms x 8-surrogate jitter null at nominal FDR 0.70, the raw-CCG row realizes FDR 0.982 (AP 0.082) while the whitened GLM row realizes 0.689 (AP 0.841). The joint fit is what makes the null usable, not the null itself.
 - Burst exclusion (untyped AP, burst-excluded minus full): 1 ms-window methods -0.002 on average (classical CCG +0.06, TSPE +0.01, FNCCH -0.04, TE 1 ms +0.04, STG ROI 15 ms -0.08), 5-10 ms-window methods +0.322 (jittered CCG +0.58, lagged Pearson +0.23, TE 5 ms +0.22, TE 10 ms +0.25); ridge GLM -0.027 in AP but label-free precision 0.311 -> 0.860. Removing burst windows removes the shared drive that swamps coarse-timescale statistics, and removes the coincidence counts that the fine-timescale statistics need.
 
@@ -76,7 +76,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | 0.898 (0.813-0.981) | 0.360 (0.187-0.642) | 0.002 (0.001-0.004) | 0.323 (0.174-0.554) | 0.305 (0.169-0.500) |
 | zero-lag Pearson | 20 | 0.744 (0.688-0.800) | 0.057 (0.041-0.080) | 0.002 (0.001-0.002) | 0.073 (0.051-0.107) | 0.070 (0.049-0.101) |
 | STG ROI 15 ms | 20 | 0.981 (0.971-0.993) | 0.812 (0.703-0.896) | 0.118 (0.006-0.336) | 0.740 (0.630-0.835) | 0.686 (0.592-0.774) |
-| GLMCC d<=14 ms | 4 | 0.976 (0.926-0.995) | 0.792 (0.515-0.903) | 0.013 (0.006-0.027) | 0.219 (0.104-0.295) | 0.205 (0.060-0.286) |
+| GLMCC d<=14 ms | 20 | 0.979 (0.926-0.995) | 0.775 (0.515-0.903) | 0.011 (0.003-0.054) | 0.208 (0.062-0.621) | 0.173 (0.047-0.505) |
 
 **ORACLE operating points (labels used to pick the threshold), full arm**
 
@@ -96,7 +96,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | 0.343 (0.210-0.535) | 0.404 (0.194-0.590) | 0.305 (0.192-0.504) | 0.352 (0.222-0.606) | 0.336 (0.210-0.511) | 0.134 (0.057-0.291) |
 | zero-lag Pearson | 20 | 0.134 (0.101-0.186) | 0.108 (0.073-0.157) | 0.182 (0.091-0.232) | 0.169 (0.071-0.218) | 0.133 (0.101-0.184) | 0.000 (0.000-0.000) |
 | STG ROI 15 ms | 20 | 0.701 (0.611-0.771) | 0.762 (0.690-0.837) | 0.651 (0.529-0.717) | 0.742 (0.605-0.810) | 0.683 (0.599-0.750) | 0.564 (0.423-0.722) |
-| GLMCC d<=14 ms | 4 | 0.252 (0.208-0.274) | 0.162 (0.130-0.179) | 0.575 (0.523-0.610) | 0.617 (0.561-0.659) | 0.280 (0.161-0.345) | 0.573 (0.134-0.748) |
+| GLMCC d<=14 ms | 20 | 0.266 (0.119-0.612) | 0.204 (0.067-0.613) | 0.516 (0.143-0.611) | 0.566 (0.167-0.673) | 0.263 (0.120-0.560) | 0.533 (0.134-0.748) |
 
 **LABEL-FREE operating points (the method's own rule), full arm**
 
@@ -116,7 +116,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | -- | -- | -- | -- | -- | -- | -- | -- |
 | zero-lag Pearson | 20 | -- | -- | -- | -- | -- | -- | -- | -- |
 | STG ROI 15 ms | 20 | 0.573 (0.356-0.674) | 0.745 (0.585-0.886) | 0.831 (0.685-0.955) | 0.636 (0.508-0.679) | 0.652 (0.485-0.694) | 0.427 (0.326-0.644) | 0.608 (0.434-0.694) | 0.687 (0.560-0.816) |
-| GLMCC d<=14 ms | 4 | 0.155 (0.070-0.215) | 0.166 (0.048-0.237) | 0.171 (0.053-0.241) | 0.160 (0.057-0.226) | 0.151 (0.059-0.207) | 0.845 (0.785-0.930) | 0.155 (0.070-0.215) | 0.166 (0.048-0.237) |
+| GLMCC d<=14 ms | 20 | 0.188 (0.046-0.857) | 0.122 (0.040-0.237) | 0.128 (0.045-0.241) | 0.124 (0.057-0.233) | 0.122 (0.059-0.247) | 0.812 (0.143-0.954) | 0.188 (0.046-0.857) | 0.122 (0.040-0.237) |
 
 **Threshold-free, burst_excluded arm**
 
@@ -136,7 +136,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | 0.960 (0.936-0.981) | 0.453 (0.245-0.684) | 0.003 (0.001-0.010) | 0.407 (0.229-0.598) | 0.369 (0.203-0.533) |
 | zero-lag Pearson | 20 | 0.776 (0.728-0.825) | 0.066 (0.055-0.081) | 0.001 (0.001-0.002) | 0.085 (0.066-0.108) | 0.080 (0.062-0.101) |
 | STG ROI 15 ms | 20 | 0.961 (0.912-0.979) | 0.732 (0.561-0.831) | 0.007 (0.003-0.015) | 0.656 (0.500-0.743) | 0.608 (0.438-0.694) |
-| GLMCC d<=14 ms | 4 | 0.960 (0.861-0.995) | 0.729 (0.263-0.903) | 0.015 (0.006-0.027) | 0.199 (0.054-0.293) | 0.208 (0.062-0.288) |
+| GLMCC d<=14 ms | 20 | 0.963 (0.861-0.995) | 0.682 (0.263-0.903) | 0.014 (0.003-0.039) | 0.138 (0.054-0.293) | 0.142 (0.054-0.288) |
 
 **ORACLE operating points (labels used to pick the threshold), burst_excluded arm**
 
@@ -156,7 +156,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | 0.408 (0.238-0.578) | 0.433 (0.175-0.628) | 0.392 (0.254-0.549) | 0.453 (0.291-0.649) | 0.392 (0.228-0.543) | 0.155 (0.052-0.349) |
 | zero-lag Pearson | 20 | 0.151 (0.119-0.186) | 0.124 (0.087-0.158) | 0.200 (0.154-0.271) | 0.185 (0.142-0.251) | 0.150 (0.119-0.183) | 0.000 (0.000-0.001) |
 | STG ROI 15 ms | 20 | 0.635 (0.512-0.706) | 0.699 (0.647-0.781) | 0.586 (0.422-0.691) | 0.674 (0.490-0.787) | 0.616 (0.474-0.692) | 0.420 (0.324-0.554) |
-| GLMCC d<=14 ms | 4 | 0.202 (0.080-0.270) | 0.135 (0.075-0.177) | 0.456 (0.086-0.631) | 0.481 (0.077-0.674) | 0.262 (0.096-0.338) | 0.567 (0.104-0.748) |
+| GLMCC d<=14 ms | 20 | 0.150 (0.077-0.287) | 0.148 (0.055-0.423) | 0.366 (0.071-0.631) | 0.391 (0.065-0.674) | 0.204 (0.096-0.367) | 0.488 (0.104-0.750) |
 
 **LABEL-FREE operating points (the method's own rule), burst_excluded arm**
 
@@ -176,7 +176,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | -- | -- | -- | -- | -- | -- | -- | -- |
 | zero-lag Pearson | 20 | -- | -- | -- | -- | -- | -- | -- | -- |
 | STG ROI 15 ms | 20 | 0.600 (0.189-0.703) | 0.524 (0.281-0.663) | 0.601 (0.320-0.742) | 0.557 (0.226-0.668) | 0.593 (0.233-0.698) | 0.400 (0.297-0.811) | 0.611 (0.169-0.717) | 0.486 (0.236-0.622) |
-| GLMCC d<=14 ms | 4 | 0.380 (0.121-1.000) | 0.152 (0.004-0.236) | 0.155 (0.004-0.239) | 0.142 (0.007-0.224) | 0.133 (0.009-0.205) | 0.620 (0.000-0.879) | 0.380 (0.121-1.000) | 0.152 (0.004-0.236) |
+| GLMCC d<=14 ms | 20 | 0.608 (0.071-1.000) | 0.088 (0.004-0.236) | 0.093 (0.004-0.239) | 0.096 (0.007-0.224) | 0.098 (0.008-0.205) | 0.392 (0.000-0.929) | 0.608 (0.071-1.000) | 0.088 (0.004-0.236) |
 
 ### seizure state
 
@@ -198,7 +198,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | 0.821 (0.757-0.873) | 0.302 (0.233-0.414) | 0.006 (0.002-0.024) | 0.276 (0.215-0.367) | 0.263 (0.200-0.353) |
 | zero-lag Pearson | 20 | 0.682 (0.628-0.751) | 0.036 (0.029-0.047) | 0.002 (0.001-0.002) | 0.056 (0.045-0.072) | 0.053 (0.044-0.069) |
 | STG ROI 15 ms | 20 | 0.988 (0.972-0.995) | 0.841 (0.731-0.904) | 0.530 (0.444-0.621) | 0.814 (0.718-0.867) | 0.713 (0.633-0.771) |
-| GLMCC d<=14 ms | 3 | 0.918 (0.894-0.944) | 0.865 (0.833-0.898) | 0.656 (0.576-0.791) | 0.927 (0.916-0.937) | 0.809 (0.767-0.862) |
+| GLMCC d<=14 ms | 20 | 0.878 (0.821-0.944) | 0.801 (0.655-0.898) | 0.524 (0.292-0.791) | 0.873 (0.705-0.937) | 0.708 (0.520-0.862) |
 
 **ORACLE operating points (labels used to pick the threshold), full arm**
 
@@ -218,7 +218,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | 0.314 (0.261-0.388) | 0.454 (0.351-0.593) | 0.241 (0.200-0.307) | 0.276 (0.235-0.357) | 0.307 (0.256-0.383) | 0.138 (0.076-0.201) |
 | zero-lag Pearson | 20 | 0.108 (0.084-0.129) | 0.102 (0.066-0.133) | 0.122 (0.092-0.210) | 0.094 (0.064-0.185) | 0.107 (0.084-0.128) | 0.000 (0.000-0.000) |
 | STG ROI 15 ms | 20 | 0.750 (0.668-0.794) | 0.792 (0.708-0.829) | 0.713 (0.632-0.774) | 0.773 (0.676-0.867) | 0.704 (0.624-0.755) | 0.628 (0.445-0.728) |
-| GLMCC d<=14 ms | 3 | 0.858 (0.845-0.873) | 0.842 (0.825-0.858) | 0.875 (0.865-0.888) | 0.878 (0.870-0.890) | 0.810 (0.780-0.846) | 0.758 (0.704-0.810) |
+| GLMCC d<=14 ms | 20 | 0.803 (0.664-0.873) | 0.794 (0.637-0.863) | 0.813 (0.689-0.888) | 0.814 (0.684-0.890) | 0.728 (0.558-0.846) | 0.650 (0.383-0.810) |
 
 **LABEL-FREE operating points (the method's own rule), full arm**
 
@@ -238,7 +238,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | -- | -- | -- | -- | -- | -- | -- | -- |
 | zero-lag Pearson | 20 | -- | -- | -- | -- | -- | -- | -- | -- |
 | STG ROI 15 ms | 20 | 0.211 (0.164-0.242) | 0.991 (0.986-0.995) | 0.997 (0.992-1.000) | 0.347 (0.281-0.389) | 0.307 (0.242-0.345) | 0.789 (0.758-0.836) | 0.248 (0.221-0.273) | 0.923 (0.898-0.935) |
-| GLMCC d<=14 ms | 3 | 0.550 (0.529-0.563) | 0.971 (0.967-0.975) | 0.976 (0.972-0.981) | 0.702 (0.684-0.712) | 0.640 (0.630-0.659) | 0.450 (0.437-0.471) | 0.550 (0.529-0.563) | 0.971 (0.967-0.975) |
+| GLMCC d<=14 ms | 20 | 0.445 (0.233-0.645) | 0.961 (0.945-0.975) | 0.968 (0.952-0.981) | 0.601 (0.374-0.773) | 0.544 (0.326-0.699) | 0.555 (0.355-0.767) | 0.445 (0.233-0.645) | 0.961 (0.945-0.975) |
 
 **Threshold-free, burst_excluded arm**
 
@@ -258,7 +258,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | 0.961 (0.932-0.983) | 0.562 (0.189-0.721) | 0.006 (0.001-0.040) | 0.509 (0.181-0.661) | 0.428 (0.145-0.558) |
 | zero-lag Pearson | 20 | 0.724 (0.682-0.765) | 0.057 (0.045-0.069) | 0.001 (0.001-0.002) | 0.075 (0.057-0.093) | 0.068 (0.050-0.087) |
 | STG ROI 15 ms | 20 | 0.969 (0.961-0.978) | 0.797 (0.698-0.838) | 0.040 (0.013-0.062) | 0.736 (0.638-0.772) | 0.651 (0.545-0.692) |
-| GLMCC d<=14 ms | 3 | 0.980 (0.978-0.983) | 0.755 (0.735-0.779) | 0.298 (0.285-0.324) | 0.637 (0.622-0.656) | 0.546 (0.534-0.569) |
+| GLMCC d<=14 ms | 20 | 0.984 (0.971-0.990) | 0.765 (0.673-0.824) | 0.213 (0.067-0.475) | 0.613 (0.498-0.758) | 0.492 (0.362-0.626) |
 
 **ORACLE operating points (labels used to pick the threshold), burst_excluded arm**
 
@@ -278,7 +278,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | 0.514 (0.285-0.620) | 0.569 (0.189-0.708) | 0.487 (0.402-0.575) | 0.557 (0.460-0.663) | 0.469 (0.254-0.566) | 0.197 (0.020-0.409) |
 | zero-lag Pearson | 20 | 0.145 (0.111-0.187) | 0.113 (0.078-0.162) | 0.214 (0.152-0.315) | 0.198 (0.134-0.299) | 0.139 (0.102-0.180) | 0.000 (0.000-0.000) |
 | STG ROI 15 ms | 20 | 0.727 (0.608-0.762) | 0.793 (0.624-0.862) | 0.672 (0.592-0.707) | 0.755 (0.665-0.814) | 0.682 (0.564-0.719) | 0.517 (0.312-0.676) |
-| GLMCC d<=14 ms | 3 | 0.611 (0.600-0.624) | 0.659 (0.649-0.669) | 0.570 (0.550-0.585) | 0.592 (0.578-0.609) | 0.574 (0.561-0.594) | 0.457 (0.426-0.517) |
+| GLMCC d<=14 ms | 20 | 0.597 (0.504-0.709) | 0.624 (0.517-0.759) | 0.573 (0.492-0.666) | 0.598 (0.525-0.685) | 0.536 (0.431-0.641) | 0.472 (0.264-0.569) |
 
 **LABEL-FREE operating points (the method's own rule), burst_excluded arm**
 
@@ -298,7 +298,7 @@ Mean over networks (min-max in parentheses). `n` = number of networks with a res
 | lagged Pearson | 20 | -- | -- | -- | -- | -- | -- | -- | -- |
 | zero-lag Pearson | 20 | -- | -- | -- | -- | -- | -- | -- | -- |
 | STG ROI 15 ms | 20 | 0.661 (0.583-0.716) | 0.660 (0.580-0.701) | 0.735 (0.661-0.797) | 0.659 (0.610-0.689) | 0.678 (0.642-0.710) | 0.339 (0.284-0.417) | 0.689 (0.632-0.740) | 0.580 (0.502-0.637) |
-| GLMCC d<=14 ms | 3 | 0.763 (0.707-0.797) | 0.477 (0.445-0.522) | 0.493 (0.464-0.536) | 0.585 (0.568-0.601) | 0.569 (0.551-0.581) | 0.237 (0.203-0.293) | 0.763 (0.707-0.797) | 0.477 (0.445-0.522) |
+| GLMCC d<=14 ms | 20 | 0.643 (0.463-0.797) | 0.556 (0.395-0.721) | 0.580 (0.406-0.743) | 0.584 (0.495-0.706) | 0.565 (0.493-0.662) | 0.357 (0.203-0.537) | 0.643 (0.463-0.797) | 0.556 (0.395-0.721) |
 
 ### Burst exclusion: what it buys each method
 
@@ -320,7 +320,7 @@ Change from the full arm to the burst-excluded arm, mean (min-max) over networks
 | lagged Pearson | +0.083 (-0.031..+0.372) | +0.233 (-0.119..+0.370) | +0.029 (-0.128..+0.238) | +0.115 (-0.267..+0.333) | oracle |
 | zero-lag Pearson | +0.012 (+0.000..+0.031) | +0.019 (-0.007..+0.036) | +0.016 (-0.019..+0.074) | +0.011 (-0.039..+0.074) | oracle |
 | STG ROI 15 ms | -0.084 (-0.301..+0.004) | -0.078 (-0.187..+0.042) | +0.027 (-0.167..+0.151) | +0.450 (+0.377..+0.508) | label-free |
-| GLMCC d<=14 ms | -0.020 (-0.050..-0.001) | -0.289 (-0.315..-0.270) | +0.225 (-0.017..+0.930) | +0.213 (+0.178..+0.234) | label-free |
+| GLMCC d<=14 ms | -0.070 (-0.546..+0.038) | -0.260 (-0.405..-0.120) | +0.420 (-0.179..+0.930) | +0.197 (+0.071..+0.345) | label-free |
 
 ### Does burstiness order the baselines too?
 
@@ -342,7 +342,7 @@ Spearman rho between a method's AP and the network's bursts per recording (negat
 | lagged Pearson | -0.14 | -0.76 | +0.17 | +0.40 |
 | zero-lag Pearson | -0.31 | -0.70 | +0.58 | +0.24 |
 | STG ROI 15 ms | -0.86 | +0.67 | -0.29 | +0.48 |
-| GLMCC d<=14 ms | -1.00 | -1.00 | -- | -- |
+| GLMCC d<=14 ms | -0.94 | -0.48 | +0.22 | +0.44 |
 
 ### GLMCC fit diagnostics
 
@@ -354,10 +354,10 @@ The published rule declares a connection when |J| > J_thr = c/sqrt(T tau lambda_
 | GLMCC | normal | full | 2.61 | 1.72 | 0.00441 | 0 | 12.2 |
 | GLMCC | seizure | burst_excluded | 1.66 | 0.603 | 0.000302 | 0 | 11.7 |
 | GLMCC | seizure | full | 0.447 | 0.321 | 2.17e-05 | 0 | 11.5 |
-| GLMCC d<=14 ms | normal | burst_excluded | 3.95 | 2.47 | 0.0781 | 2.38e-06 | 42.9 |
-| GLMCC d<=14 ms | normal | full | 2.66 | 1.94 | 0.016 | 0 | 41.2 |
-| GLMCC d<=14 ms | seizure | burst_excluded | 1.84 | 0.69 | 0.000483 | 0 | 40.5 |
-| GLMCC d<=14 ms | seizure | full | 0.46 | 0.314 | 4.62e-05 | 0 | 36.2 |
+| GLMCC d<=14 ms | normal | burst_excluded | 3.8 | 2.64 | 0.0761 | 6.93e-07 | 42.9 |
+| GLMCC d<=14 ms | normal | full | 2.61 | 1.72 | 0.0124 | 0 | 40.8 |
+| GLMCC d<=14 ms | seizure | burst_excluded | 1.66 | 0.603 | 0.000472 | 0 | 40.2 |
+| GLMCC d<=14 ms | seizure | full | 0.447 | 0.321 | 2.71e-05 | 0 | 36.2 |
 
 ### Staging pilot (n = 50 recordings; quietest and burstiest network)
 
@@ -415,12 +415,12 @@ The sweep was executed LOCALLY (24-core workstation, 62 GB) with analysis/baseli
 | lagged Pearson | 80 | 17 s | 69 s | 0.4 |
 | zero-lag Pearson | 80 | 5 s | 16 s | 0.1 |
 | STG ROI 15 ms | 80 | 14 s | 22 s | 0.3 |
-| GLMCC d<=14 ms | 14 | 342 s | 554 s | 1.3 |
+| GLMCC d<=14 ms | 80 | 564 s | 1011 s | 12.5 |
 
 - **Subsampled:** nothing. Every method scored every ordered pair of every dataset.
 - **Failed to run:** nothing (all (dataset, method, arm) jobs completed).
 - **Projected before launch:** Measured on sweep_c50_seed01/normal at n = 50 before launch (4 BLAS threads, other jobs running), then scaled: the shared 1 ms pass (session load + 51 lag products) ~5 s at n = 50 -> ~20 s at n = 200 (linear in data); ccg_classical / fncch / tspe add ~1-3 s of per-pair work on top of it; ccg_jitter ~10 s at n = 50 (8 surrogate lag-product passes) -> ~40 s; glm_ridge ~25 s at n = 50 (fit + 8 surrogate fits) -> ~90 s; transfer entropy 28 s (1 ms), 15 s (2 ms), ~5 s (5, 10 ms) at n = 50 -> ~4x; stg ~13 s score + 7 s label-free (per-pair FFTs, independent of n); glmcc 0.31 s per 1000 unordered pairs = 157 s per dataset-arm at N = 926 (Newton on 428k pairs x 4 delays, 12.8 iterations per pair on average; per-pair cost independent of n), i.e. ~3.5 CPU-h for the 80 (dataset, arm) jobs; glmcc_d14 ~3.5x that (14 delays, warm-started) ~ 9 min per dataset-arm, ~12 CPU-h. Whole phase 1 projected at ~25-35 min per (session, state) job (seizure slower: 6x the spikes), 40 jobs -> ~20 CPU-h, ~4 h wall on 5 workers. Memory per worker projected < 4 GB (seizure-state jitter surrogates dominate).
-- **Spent:** Phase 1 (every method except glmcc_d14; 40 (session, state) jobs x 14 methods x 2 arms, n = 200): 5.6 h wall on 5 workers x 4 threads, 0 failures. Normal-state jobs took 8-18 min, seizure-state jobs 41-86 min: the shipped GLM's 8 surrogate refits dominate there (e.g. sweep_c50_seed01/seizure: glm_ridge 1915 s, ccg_jitter 450 s, ccg_classical 303 s, te_1ms 213 s, glmcc 146 s, everything else < 60 s), because the sparse Gram assembly scales with the six-fold spike count. Per-method wall times for every job are in compute.json.
+- **Spent:** Phase 1 (every method except glmcc_d14; 40 (session, state) jobs x 14 methods x 2 arms, n = 200): 5.6 h wall on 5 workers x 4 threads, 0 failures. Normal-state jobs took 8-18 min, seizure-state jobs 41-86 min: the shipped GLM's 8 surrogate refits dominate there (e.g. sweep_c50_seed01/seizure: glm_ridge 1915 s, ccg_jitter 450 s, ccg_classical 303 s, te_1ms 213 s, glmcc 146 s, everything else < 60 s), because the sparse Gram assembly scales with the six-fold spike count. Per-method wall times for every job are in compute.json. Phase 2 (glmcc_d14 only, 40 jobs x 2 arms): 3.0 h wall on 2 workers for the c40 group and ~2.7 h on 3 workers for the c50 group, 0 failures; 7-13 min per (dataset, arm) at N = 926.
 
 ## LIMITATIONS: what each method was validated on, and how this network differs
 
